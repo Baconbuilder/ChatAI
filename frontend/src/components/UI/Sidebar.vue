@@ -20,18 +20,11 @@
         :conversation="conversation"
         :is-active="currentConversationId === conversation.id"
         @select="selectConversation"
+        @rename="startRename"
         @delete="deleteConversation"
       />
     </div>
 
-    <div class="sidebar-footer">
-      <button
-        @click="logout"
-        class="logout-button"
-      >
-        Logout
-      </button>
-    </div>
   </div>
 </template>
 
@@ -50,6 +43,7 @@ export default {
     const router = useRouter();
     const conversations = ref([]);
     const currentConversationId = ref(null);
+    const editingConversation = ref(null);
 
     const loadConversations = async () => {
       try {
@@ -73,6 +67,28 @@ export default {
     const selectConversation = (id) => {
       currentConversationId.value = id;
       router.push(`/chat/${id}`);
+    };
+
+    const startRename = (id) => {
+      const conversation = conversations.value.find(c => c.id === id);
+      if (conversation) {
+        const newTitle = prompt('Enter new title:', conversation.title);
+        if (newTitle && newTitle !== conversation.title) {
+          renameConversation(id, newTitle);
+        }
+      }
+    };
+
+    const renameConversation = async (id, newTitle) => {
+      try {
+        await conversationService.updateConversation(id, { title: newTitle });
+        const conversation = conversations.value.find(c => c.id === id);
+        if (conversation) {
+          conversation.title = newTitle;
+        }
+      } catch (error) {
+        console.error('Failed to rename conversation:', error);
+      }
     };
 
     const deleteConversation = async (id) => {
@@ -100,6 +116,7 @@ export default {
       currentConversationId,
       createNewChat,
       selectConversation,
+      startRename,
       deleteConversation,
       logout
     };
@@ -166,21 +183,4 @@ export default {
   border-top: 1px solid #e5e5e5;
 }
 
-.logout-button {
-  width: 100%;
-  padding: 12px;
-  background-color: #f3f4f6;
-  color: #ef4444;
-  border: none;
-  border-radius: 8px;
-  font-size: 14px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.logout-button:hover {
-  background-color: #fee2e2;
-  color: #dc2626;
-}
 </style>

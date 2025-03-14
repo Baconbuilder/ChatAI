@@ -31,6 +31,16 @@ export const conversationService = {
     }
   },
 
+  async updateConversation(id, data) {
+    try {
+      const response = await api.put(`/conversations/${id}`, data);
+      return response.data;
+    } catch (error) {
+      console.error('Failed to update conversation:', error);
+      throw this.handleError(error);
+    }
+  },
+
   async deleteConversation(id) {
     try {
       await api.delete(`/conversations/${id}`);
@@ -59,16 +69,6 @@ export const conversationService = {
       return response.data;
     } catch (error) {
       console.error('Failed to send message:', error);
-      throw this.handleError(error);
-    }
-  },
-
-  async updateConversationTitle(id, title) {
-    try {
-      const response = await api.put(`/conversations/${id}`, { title });
-      return response.data;
-    } catch (error) {
-      console.error('Failed to update conversation title:', error);
       throw this.handleError(error);
     }
   },
