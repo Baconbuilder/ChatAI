@@ -1,13 +1,13 @@
 // store/index.js
 import { createStore } from 'vuex';
 import auth from './auth';
-import conversations from './conversations';
+import chat from './modules/chat';
 import { conversationService } from '@/services/conversationService';
 
 export default createStore({
   modules: {
     auth,
-    conversations
+    chat
   },
   state: {},
   mutations: {},

@@ -1,8 +1,9 @@
 // ChatInput.vue
 <template>
-  <div class="border-t border-gray-200 px-4 pt-4 sm:px-6">
+  <div class="chat-input-container">
     <div class="relative flex flex-col gap-2">
-      <div class="flex items-center gap-2 mb-2">
+      <!-- File upload section -->
+      <div class="flex items-center gap-2">
         <input
           type="file"
           ref="fileInput"
@@ -13,7 +14,7 @@
         />
         <button
           type="button"
-          class="inline-flex items-center rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+          class="upload-button"
           @click="$refs.fileInput.click()"
           :disabled="isLoading"
         >
@@ -25,13 +26,13 @@
       </div>
       
       <!-- Display uploaded files -->
-      <div v-if="uploadedFiles.length > 0" class="mb-2">
+      <div v-if="uploadedFiles.length > 0" class="uploaded-files">
         <div class="text-sm text-gray-500 mb-1">Uploaded files:</div>
         <div class="flex flex-wrap gap-2">
           <div
             v-for="file in uploadedFiles"
             :key="file.name"
-            class="flex items-center gap-1 bg-gray-100 rounded-md px-2 py-1 text-sm"
+            class="file-tag"
           >
             <span>{{ file.name }}</span>
             <button
@@ -44,18 +45,19 @@
         </div>
       </div>
 
-      <textarea
-        ref="textarea"
-        v-model="message"
-        rows="3"
-        class="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
-        placeholder="Type your message..."
-        @keydown.enter.prevent="handleEnter"
-      ></textarea>
-      <div class="absolute bottom-0 right-0 flex items-center pr-3">
+      <!-- Message input section -->
+      <div class="input-wrapper">
+        <textarea
+          ref="textarea"
+          v-model="message"
+          rows="3"
+          class="message-input"
+          placeholder="Type your message..."
+          @keydown.enter.prevent="handleEnter"
+        ></textarea>
         <button
           type="button"
-          class="inline-flex items-center rounded-md border border-transparent bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+          class="send-button"
           :disabled="!message.trim() || isLoading"
           @click="sendMessage"
         >
@@ -115,8 +117,8 @@ export default {
         event.target.value = ''; // Reset file input
         
         // Add a message about the uploaded files
-        const fileNames = files.map(f => f.name).join(', ');
-        message.value = `I've uploaded the following PDF(s): ${fileNames}. Please help me understand their content.`;
+        // const fileNames = files.map(f => f.name).join(', ');
+        // message.value = `I've uploaded the following PDF(s): ${fileNames}. Please help me understand their content.`;
         
       } catch (error) {
         console.error('Error uploading files:', error);
@@ -157,55 +159,98 @@ export default {
 
 <style scoped>
 .chat-input-container {
-  padding: 10px 20px;
+  padding: 8px 16px;
   background-color: white;
   border-top: 1px solid #e5e5e5;
+  margin-top: auto;
 }
 
 .input-wrapper {
   display: flex;
   position: relative;
+  margin-top: 8px;
 }
 
-textarea {
-  flex: 1;
-  height: 52px;
+.message-input {
+  width: 100%;
+  min-height: 44px;
   max-height: 200px;
-  padding: 15px;
-  padding-right: 50px;
+  padding: 12px;
+  padding-right: 100px;
   border: 1px solid #e5e5e5;
-  border-radius: 6px;
+  border-radius: 8px;
   resize: none;
   outline: none;
   font-family: inherit;
   font-size: 14px;
   line-height: 1.5;
+  background-color: #fff;
 }
 
-textarea:focus {
+.message-input:focus {
   border-color: #10a37f;
+  box-shadow: 0 0 0 2px rgba(16, 163, 127, 0.1);
 }
 
 .send-button {
   position: absolute;
-  right: 10px;
-  bottom: 13px;
-  background: none;
+  right: 8px;
+  bottom: 8px;
+  padding: 6px 12px;
+  background-color: #10a37f;
+  color: white;
   border: none;
-  color: #10a37f;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
   cursor: pointer;
-  font-size: 18px;
+  transition: background-color 0.2s;
+}
+
+.send-button:hover:not(:disabled) {
+  background-color: #0d8a6c;
 }
 
 .send-button:disabled {
-  color: #d9d9e3;
+  background-color: #e5e5e5;
   cursor: not-allowed;
 }
 
-.input-footer {
-  margin-top: 5px;
+.upload-button {
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 12px;
+  background-color: white;
+  border: 1px solid #e5e5e5;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  color: #666;
+  transition: all 0.2s;
+}
+
+.upload-button:hover:not(:disabled) {
+  background-color: #f5f5f5;
+  border-color: #d5d5d5;
+}
+
+.uploaded-files {
+  margin-top: 4px;
+}
+
+.file-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  background-color: #f5f5f5;
+  border-radius: 4px;
   font-size: 12px;
-  color: #8e8ea0;
-  text-align: right;
+}
+
+.file-tag button {
+  padding: 0 4px;
+  font-size: 16px;
+  line-height: 1;
 }
 </style>

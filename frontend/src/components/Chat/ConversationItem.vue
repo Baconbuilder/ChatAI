@@ -33,7 +33,7 @@
         <div class="py-1" role="menu">
           <button
             class="w-full px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 text-right"
-            @click.stop="$emit('rename', conversation.id)"
+            @click.stop="handleRename"
           >
             Rename
           </button>
@@ -51,6 +51,7 @@
 
 <script>
 import { ref, onMounted, onUnmounted } from 'vue';
+import { useStore } from 'vuex';
 
 export default {
   name: 'ConversationItem',
@@ -65,7 +66,8 @@ export default {
     }
   },
   emits: ['select', 'rename', 'delete'],
-  setup() {
+  setup(props) {
+    const store = useStore();
     const isMenuOpen = ref(false);
     const dropdownPosition = ref({ top: 0, left: 0 });
 
@@ -76,6 +78,22 @@ export default {
         top: rect.bottom + 4,
         left: rect.right - 160 // Width of dropdown
       };
+    };
+
+    const handleRename = async () => {
+      const newTitle = prompt('Enter new title:', props.conversation.title);
+      if (newTitle && newTitle !== props.conversation.title) {
+        try {
+          await store.dispatch('chat/updateConversationTitle', {
+            conversationId: props.conversation.id,
+            title: newTitle
+          });
+          isMenuOpen.value = false;
+        } catch (error) {
+          console.error('Failed to rename conversation:', error);
+          alert('Failed to rename conversation. Please try again.');
+        }
+      }
     };
 
     // Close menu when clicking outside
@@ -97,7 +115,8 @@ export default {
     return {
       isMenuOpen,
       dropdownPosition,
-      updateDropdownPosition
+      updateDropdownPosition,
+      handleRename
     };
   }
 };

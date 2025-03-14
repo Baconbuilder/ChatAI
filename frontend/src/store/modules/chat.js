@@ -19,8 +19,18 @@ export default {
     SET_CURRENT_CONVERSATION(state, conversation) {
       state.currentConversation = conversation;
     },
+    UPDATE_CONVERSATION_TITLE(state, { conversationId, title }) {
+      const conversation = state.conversations.find(c => c.id === conversationId);
+      if (conversation) {
+        conversation.title = title;
+      }
+      if (state.currentConversation?.id === conversationId) {
+        state.currentConversation.title = title;
+      }
+    },
     ADD_CONVERSATION(state, conversation) {
       state.conversations.unshift(conversation);
+      state.currentConversation = conversation;
     },
     REMOVE_CONVERSATION(state, conversationId) {
       state.conversations = state.conversations.filter(c => c.id !== conversationId);
@@ -34,6 +44,13 @@ export default {
           state.currentConversation.messages = [];
         }
         state.currentConversation.messages.push(message);
+      }
+    },
+    REMOVE_MESSAGE(state, { conversationId, messageId }) {
+      if (state.currentConversation?.id === conversationId) {
+        state.currentConversation.messages = state.currentConversation.messages.filter(
+          msg => msg.id !== messageId
+        );
       }
     },
     SET_LOADING(state, isLoading) {
@@ -64,7 +81,6 @@ export default {
       try {
         const conversation = await conversationService.createConversation(title);
         commit('ADD_CONVERSATION', conversation);
-        commit('SET_CURRENT_CONVERSATION', conversation);
         return conversation;
       } catch (error) {
         console.error('Error creating conversation:', error);
@@ -80,22 +96,23 @@ export default {
         throw error;
       }
     },
-    async sendMessage({ commit }, { conversationId, content, language, sourceDocuments }) {
+    async sendMessage({ commit }, { conversationId, content }) {
       try {
-        commit('SET_LOADING', true);
-        const message = await conversationService.sendMessage(
-          conversationId,
-          content,
-          language,
-          sourceDocuments
-        );
+        const message = await conversationService.sendMessage(conversationId, content);
         commit('ADD_MESSAGE', { conversationId, message });
         return message;
       } catch (error) {
         console.error('Error sending message:', error);
         throw error;
-      } finally {
-        commit('SET_LOADING', false);
+      }
+    },
+    async updateConversationTitle({ commit }, { conversationId, title }) {
+      try {
+        await conversationService.updateConversation(conversationId, { title });
+        commit('UPDATE_CONVERSATION_TITLE', { conversationId, title });
+      } catch (error) {
+        console.error('Error updating conversation title:', error);
+        throw error;
       }
     }
   }

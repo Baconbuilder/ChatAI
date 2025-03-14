@@ -43,7 +43,6 @@
   import { ref, onMounted, watch, computed } from 'vue';
   import { useRoute } from 'vue-router';
   import { useStore } from 'vuex';
-  import { conversationService } from '@/services/conversationService';
   import Sidebar from '@/components/UI/Sidebar.vue';
   import Header from '@/components/UI/Header.vue';
   import ChatMessage from '@/components/Chat/ChatMessage.vue';
@@ -60,22 +59,11 @@
     setup() {
       const route = useRoute();
       const store = useStore();
-      const currentConversation = ref(null);
       const isLoading = ref(false);
       const messagesContainer = ref(null);
 
       const currentUserId = computed(() => String(store.state.auth.user?.id));
-
-      const createNewConversation = async (title) => {
-        try {
-          const response = await conversationService.createConversation(title);
-          currentConversation.value = response;
-          return response;
-        } catch (error) {
-          console.error('Failed to create conversation:', error);
-          throw error;
-        }
-      };
+      const currentConversation = computed(() => store.state.chat.currentConversation);
 
       const handleSendMessage = async (content) => {
         if (!content.trim() || isLoading.value) return;
@@ -87,12 +75,7 @@
           
           // If no conversation exists, create one
           if (!currentConversation.value) {
-            currentConversation.value = await createNewConversation('New Chat');
-          }
-
-          // Initialize messages array if it doesn't exist
-          if (!currentConversation.value.messages) {
-            currentConversation.value.messages = [];
+            await store.dispatch('chat/createConversation', 'New Chat');
           }
 
           // Create user message
@@ -106,75 +89,55 @@
           temporaryMessageId = userMessage.id;
 
           // Add user message immediately
-          currentConversation.value.messages.push(userMessage);
+          await store.commit('chat/ADD_MESSAGE', { 
+            conversationId: currentConversation.value.id, 
+            message: userMessage 
+          });
           scrollToBottom();
 
-          // Now send the message and wait for response
-          const response = await conversationService.sendMessage(
-            currentConversation.value.id,
-            content
-          );
+          // Send the message and get response
+          const response = await store.dispatch('chat/sendMessage', {
+            conversationId: currentConversation.value.id,
+            content: content
+          });
 
-          // Add assistant response if it exists
-          if (response && response.content) {
-            const assistantMessage = {
-              id: response.id || Date.now() + 1,
-              content: response.content,
-              role: 'assistant',
-              conversation_id: currentConversation.value.id,
-              created_at: response.created_at || new Date().toISOString()
-            };
-            currentConversation.value.messages.push(assistantMessage);
-            scrollToBottom();
-          }
-          
           // Update conversation title if it's the first message
           if (currentConversation.value.messages.length <= 2) {
             const newTitle = content.length > 30 
               ? content.substring(0, 30) + '...' 
               : content;
-            currentConversation.value.title = newTitle;
+            await store.dispatch('chat/updateConversationTitle', {
+              conversationId: currentConversation.value.id,
+              title: newTitle
+            });
           }
 
         } catch (error) {
           console.error('Error sending message:', error);
           
-          // Remove the user message if the request failed
-          if (currentConversation.value?.messages && temporaryMessageId) {
-            currentConversation.value.messages = currentConversation.value.messages
-              .filter(msg => msg.id !== temporaryMessageId);
+          if (temporaryMessageId) {
+            // Remove the temporary message
+            await store.commit('chat/REMOVE_MESSAGE', {
+              conversationId: currentConversation.value.id,
+              messageId: temporaryMessageId
+            });
           }
           
-          // Add error message to the conversation
-          if (currentConversation.value?.messages) {
-            const errorMessage = {
-              id: Date.now(),
-              content: error.message || 'Failed to get response. Please try again.',
-              role: 'error',
-              conversation_id: currentConversation.value.id,
-              created_at: new Date().toISOString()
-            };
-            currentConversation.value.messages.push(errorMessage);
-            scrollToBottom();
-          }
-          
-          // If this was a new conversation that failed, reset it
-          if (currentConversation.value?.messages.length === 0) {
-            currentConversation.value = null;
-          }
+          // Add error message
+          const errorMessage = {
+            id: Date.now(),
+            content: error.message || 'Failed to get response. Please try again.',
+            role: 'error',
+            conversation_id: currentConversation.value?.id,
+            created_at: new Date().toISOString()
+          };
+          await store.commit('chat/ADD_MESSAGE', {
+            conversationId: currentConversation.value.id,
+            message: errorMessage
+          });
+          scrollToBottom();
         } finally {
           isLoading.value = false;
-        }
-      };
-
-      const loadConversation = async (id) => {
-        if (!id) return;
-        try {
-          const response = await conversationService.getConversation(id);
-          currentConversation.value = response;
-          scrollToBottom();
-        } catch (error) {
-          console.error('Failed to load conversation:', error);
         }
       };
 
@@ -189,11 +152,11 @@
       // Watch for route changes
       watch(
         () => route.params.id,
-        (newId) => {
+        async (newId) => {
           if (newId) {
-            loadConversation(newId);
+            await store.dispatch('chat/loadConversation', newId);
           } else {
-            currentConversation.value = null;
+            store.commit('chat/SET_CURRENT_CONVERSATION', null);
           }
         },
         { immediate: true }

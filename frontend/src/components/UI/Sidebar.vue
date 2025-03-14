@@ -29,10 +29,10 @@
 </template>
 
 <script>
-import { ref, onMounted } from 'vue';
+import { ref, computed, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
+import { useStore } from 'vuex';
 import ConversationItem from '@/components/Chat/ConversationItem.vue';
-import { conversationService } from '@/services/conversationService';
 
 export default {
   name: 'Sidebar',
@@ -41,14 +41,14 @@ export default {
   },
   setup() {
     const router = useRouter();
-    const conversations = ref([]);
+    const store = useStore();
     const currentConversationId = ref(null);
-    const editingConversation = ref(null);
+
+    const conversations = computed(() => store.state.chat.conversations);
 
     const loadConversations = async () => {
       try {
-        const response = await conversationService.getConversations();
-        conversations.value = response;
+        await store.dispatch('chat/fetchConversations');
       } catch (error) {
         console.error('Failed to load conversations:', error);
       }
@@ -56,8 +56,7 @@ export default {
 
     const createNewChat = async () => {
       try {
-        const conversation = await conversationService.createConversation('New Chat');
-        conversations.value.unshift(conversation);
+        const conversation = await store.dispatch('chat/createConversation', 'New Chat');
         router.push(`/chat/${conversation.id}`);
       } catch (error) {
         console.error('Failed to create new chat:', error);
@@ -69,42 +68,15 @@ export default {
       router.push(`/chat/${id}`);
     };
 
-    const startRename = (id) => {
-      const conversation = conversations.value.find(c => c.id === id);
-      if (conversation) {
-        const newTitle = prompt('Enter new title:', conversation.title);
-        if (newTitle && newTitle !== conversation.title) {
-          renameConversation(id, newTitle);
-        }
-      }
-    };
-
-    const renameConversation = async (id, newTitle) => {
-      try {
-        await conversationService.updateConversation(id, { title: newTitle });
-        const conversation = conversations.value.find(c => c.id === id);
-        if (conversation) {
-          conversation.title = newTitle;
-        }
-      } catch (error) {
-        console.error('Failed to rename conversation:', error);
-      }
-    };
-
     const deleteConversation = async (id) => {
       try {
-        await conversationService.deleteConversation(id);
-        conversations.value = conversations.value.filter(c => c.id !== id);
+        await store.dispatch('chat/deleteConversation', id);
         if (currentConversationId.value === id) {
           router.push('/chat');
         }
       } catch (error) {
         console.error('Failed to delete conversation:', error);
       }
-    };
-
-    const logout = () => {
-      // Implement logout logic
     };
 
     onMounted(() => {
@@ -116,9 +88,7 @@ export default {
       currentConversationId,
       createNewChat,
       selectConversation,
-      startRename,
-      deleteConversation,
-      logout
+      deleteConversation
     };
   }
 };

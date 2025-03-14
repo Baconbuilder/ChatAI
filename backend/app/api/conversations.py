@@ -128,4 +128,23 @@ def delete_conversation(
     
     db.delete(conversation)
     db.commit()
-    return {"message": "Conversation deleted"} 
+    return {"message": "Conversation deleted"}
+
+@router.put("/conversations/{conversation_id}", response_model=ConversationResponse)
+def update_conversation(
+    conversation_id: int,
+    conversation: ConversationCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    db_conversation = db.query(Conversation).filter(
+        Conversation.id == conversation_id,
+        Conversation.user_id == current_user.id
+    ).first()
+    if not db_conversation:
+        raise HTTPException(status_code=404, detail="Conversation not found")
+    
+    db_conversation.title = conversation.title
+    db.commit()
+    db.refresh(db_conversation)
+    return db_conversation 
