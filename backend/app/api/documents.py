@@ -74,4 +74,30 @@ async def upload_document(
         raise HTTPException(
             status_code=500,
             detail=f"Error uploading file: {str(e)}\n{traceback.format_exc()}"
+        )
+
+@router.get("/documents/test")
+async def test_vectorstore(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    try:
+        # Get a sample of documents from the vector store
+        retriever = rag_service.vectorstore.as_retriever(search_kwargs={"k": 2})
+        docs = retriever.get_relevant_documents("What is this document about?")
+        
+        return {
+            "message": "Vector store test results",
+            "document_samples": [
+                {
+                    "content": doc.page_content[:200] + "...",
+                    "metadata": doc.metadata
+                }
+                for doc in docs
+            ]
+        }
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error testing vector store: {str(e)}"
         ) 

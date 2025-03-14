@@ -47,16 +47,32 @@ export default {
 <style scoped>
 .message {
   display: flex;
-  margin-bottom: 20px;
-  padding: 10px 0;
+  padding: 1rem;
+  margin: 0.5rem 0;
+  border-radius: 8px;
+  max-width: 80%;
 }
 
 .message.user {
-  background-color: #f7f7f8;
+  margin-left: auto;
+  background-color: #007AFF;
+  color: white;
 }
 
 .message.assistant {
-  background-color: white;
+  margin-right: auto;
+  background-color: #f0f0f0;
+  color: #333;
+}
+
+.message.error {
+  margin: 0 auto;
+  background-color: #ffebee;
+  color: #d32f2f;
+  border: 1px solid #ffcdd2;
+  font-size: 0.9em;
+  text-align: center;
+  max-width: 60%;
 }
 
 .message-avatar {
@@ -74,8 +90,8 @@ export default {
 }
 
 .message-content {
-  flex: 1;
-  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 
 .message-content pre {

@@ -7,7 +7,7 @@ export const conversationService = {
       return response.data;
     } catch (error) {
       console.error('Failed to fetch conversations:', error);
-      throw error;
+      throw this.handleError(error);
     }
   },
 
@@ -17,7 +17,7 @@ export const conversationService = {
       return response.data;
     } catch (error) {
       console.error('Failed to fetch conversation:', error);
-      throw error;
+      throw this.handleError(error);
     }
   },
 
@@ -27,7 +27,7 @@ export const conversationService = {
       return response.data;
     } catch (error) {
       console.error('Failed to create conversation:', error);
-      throw error;
+      throw this.handleError(error);
     }
   },
 
@@ -36,7 +36,7 @@ export const conversationService = {
       await api.delete(`/conversations/${id}`);
     } catch (error) {
       console.error('Failed to delete conversation:', error);
-      throw error;
+      throw this.handleError(error);
     }
   },
 
@@ -45,10 +45,21 @@ export const conversationService = {
       const response = await api.post(`/conversations/${conversationId}/messages`, {
         content
       });
+      
+      if (!response.data) {
+        throw new Error('No response data received from server');
+      }
+      
+      // Ensure the response has the expected structure
+      if (!response.data.content) {
+        console.warn('Unexpected response structure:', response.data);
+        throw new Error('Invalid response format from server');
+      }
+      
       return response.data;
     } catch (error) {
       console.error('Failed to send message:', error);
-      throw error;
+      throw this.handleError(error);
     }
   },
 
@@ -57,7 +68,37 @@ export const conversationService = {
       const response = await api.put(`/conversations/${id}`, { title });
       return response.data;
     } catch (error) {
-      throw error.response?.data || { message: 'Failed to update conversation title' };
+      console.error('Failed to update conversation title:', error);
+      throw this.handleError(error);
     }
+  },
+
+  // Helper method to handle errors consistently
+  handleError(error) {
+    if (error.code === 'ECONNABORTED') {
+      return {
+        message: 'The request took too long to complete. The system might be busy processing a complex query. Please try again.',
+        code: 'TIMEOUT'
+      };
+    }
+    
+    if (error.response?.data) {
+      return {
+        message: error.response.data.detail || error.response.data.message || 'An error occurred with the request.',
+        code: error.response.status
+      };
+    }
+    
+    if (error.message) {
+      return {
+        message: error.message,
+        code: 'ERROR'
+      };
+    }
+    
+    return {
+      message: 'An unexpected error occurred.',
+      code: 'UNKNOWN'
+    };
   }
 }; 

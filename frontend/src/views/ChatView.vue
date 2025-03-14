@@ -80,19 +80,15 @@
       const handleSendMessage = async (content) => {
         if (!content.trim() || isLoading.value) return;
         
+        let temporaryMessageId = null;
+        
         try {
           isLoading.value = true;
           
           // If no conversation exists, create one
           if (!currentConversation.value) {
-            await createNewConversation('New Chat');
+            currentConversation.value = await createNewConversation('New Chat');
           }
-
-          // Now send the message
-          const response = await conversationService.sendMessage(
-            currentConversation.value.id,
-            content
-          );
 
           // Initialize messages array if it doesn't exist
           if (!currentConversation.value.messages) {
@@ -107,22 +103,65 @@
             conversation_id: currentConversation.value.id,
             created_at: new Date().toISOString()
           };
+          temporaryMessageId = userMessage.id;
 
-          // Add user message and assistant response
+          // Add user message immediately
           currentConversation.value.messages.push(userMessage);
-          currentConversation.value.messages.push(response);
+          scrollToBottom();
+
+          // Now send the message and wait for response
+          const response = await conversationService.sendMessage(
+            currentConversation.value.id,
+            content
+          );
+
+          // Add assistant response if it exists
+          if (response && response.content) {
+            const assistantMessage = {
+              id: response.id || Date.now() + 1,
+              content: response.content,
+              role: 'assistant',
+              conversation_id: currentConversation.value.id,
+              created_at: response.created_at || new Date().toISOString()
+            };
+            currentConversation.value.messages.push(assistantMessage);
+            scrollToBottom();
+          }
           
           // Update conversation title if it's the first message
-          if (currentConversation.value.messages.length === 1) {
+          if (currentConversation.value.messages.length <= 2) {
             const newTitle = content.length > 30 
               ? content.substring(0, 30) + '...' 
               : content;
             currentConversation.value.title = newTitle;
           }
 
-          scrollToBottom();
         } catch (error) {
           console.error('Error sending message:', error);
+          
+          // Remove the user message if the request failed
+          if (currentConversation.value?.messages && temporaryMessageId) {
+            currentConversation.value.messages = currentConversation.value.messages
+              .filter(msg => msg.id !== temporaryMessageId);
+          }
+          
+          // Add error message to the conversation
+          if (currentConversation.value?.messages) {
+            const errorMessage = {
+              id: Date.now(),
+              content: error.message || 'Failed to get response. Please try again.',
+              role: 'error',
+              conversation_id: currentConversation.value.id,
+              created_at: new Date().toISOString()
+            };
+            currentConversation.value.messages.push(errorMessage);
+            scrollToBottom();
+          }
+          
+          // If this was a new conversation that failed, reset it
+          if (currentConversation.value?.messages.length === 0) {
+            currentConversation.value = null;
+          }
         } finally {
           isLoading.value = false;
         }
