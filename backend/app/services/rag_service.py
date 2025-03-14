@@ -14,10 +14,10 @@ import glob
 MODEL_NAME = "llama3.2:latest"
 TEMPERATURE = 0.5
 EMBEDDING_MODEL = "snowflake-arctic-embed2"
-CHUNK_SIZE = 512
-CHUNK_OVERLAP = 50
-ZH_CHUNK_SIZE = 384
-ZH_CHUNK_OVERLAP = 75
+CHUNK_SIZE = 1024
+CHUNK_OVERLAP = 256
+ZH_CHUNK_SIZE = 768
+ZH_CHUNK_OVERLAP = 192
 
 class RAGService:
     def __init__(self):
@@ -151,19 +151,23 @@ class RAGService:
         retriever = self.vectorstore.as_retriever(
             search_type="mmr",  # Use MMR for better diversity
             search_kwargs={
-                "k": 6,  # Retrieve more documents
-                "fetch_k": 20,  # Consider more candidates
-                "lambda_mult": 0.7  # Balance between relevance and diversity
+                "k": 8,  # Increased number of retrieved documents
+                "fetch_k": 30,  # Consider more candidates
+                "lambda_mult": 0.9  # Strong focus on relevance to current query
             }
         )
         
         # Setup question condenser with improved prompt
         condense_template = """Given the chat history and the latest user question, create a standalone question.
+        IMPORTANT: Each question should be treated independently, even if similar topics were discussed before.
+        DO NOT reference previous questions or indicate that a topic has been discussed before.
+        
         The standalone question should:
-        1. Capture the full context from the chat history
+        1. Focus ONLY on the current question
         2. Be specific and detailed
-        3. Focus on extracting factual information from documents
-        4. Maintain the original intent of the user's question
+        3. Focus on extracting factual information
+        4. NEVER mention or reference previous questions
+        5. NEVER use phrases like "again", "as mentioned", or similar
         
         Chat History: {chat_history}
         Latest Question: {input}
@@ -185,16 +189,18 @@ class RAGService:
             ("system", """You are a helpful and friendly AI assistant capable of both general conversation and document analysis.
 
                     When responding to general queries:
-                    - Be natural and conversational
+                    - Be natural but professional
                     - Draw from your general knowledge
-                    - Engage in casual conversation when appropriate
-                    - Don't mention documents unless the query is about them
+                    - Provide clear, complete answers
+                    - End responses definitively without asking questions
+                    - Avoid phrases like "Does that make sense?" or "Does that help?"
 
                     When the query is specifically about the documents in the context:
                     1. Carefully analyze the provided document chunks
                     2. Extract key information and main ideas
                     3. Synthesize a clear and accurate response
                     4. Focus on academic and technical details when present
+                    5. End with a clear conclusion, not a question
                     
                     Document Context (only use when query is about documents):
                     {context}"""),
@@ -203,19 +209,21 @@ class RAGService:
         ])
         
         zh_prompt = ChatPromptTemplate.from_messages([
-            ("system", """你是一個友善且樂於助人的AI助理，能夠進行一般對話並分析文件。
+            ("system", """你是一個專業且樂於助人的AI助理，能夠進行一般對話並分析文件。
 
                     當回應一般查詢時：
-                    - 保持自然和對話式的語氣
+                    - 保持自然但專業的語氣
                     - 運用你的一般知識
-                    - 適時進行輕鬆的對話
-                    - 除非查詢與文件相關，否則不要提及文件
+                    - 提供清晰完整的答案
+                    - 以明確的結論結束，不要提問
+                    - 避免使用「明白嗎？」或「有幫助嗎？」等問句
 
                     當查詢特別針對文件內容時：
                     1. 仔細分析提供的文件片段
                     2. 提取關鍵信息和主要觀點
                     3. 綜合形成清晰準確的回答
                     4. 注重學術和技術細節
+                    5. 以明確的結論結束
                     
                     文件上下文（僅在查詢與文件相關時使用）：
                     {context}"""),
@@ -255,6 +263,12 @@ class RAGService:
             chat_history = []
         
         try:
+            print("\n=== Debug Information ===")
+            print(f"Raw query: {repr(query)}")
+            print("\nChat History:")
+            for msg in chat_history:
+                print(f"Role: {msg['role']}, Content: {repr(msg['content'])}")
+            
             # Format chat history for LangChain
             formatted_history = []
             for msg in chat_history:
@@ -262,30 +276,59 @@ class RAGService:
                     formatted_history.append(("human", msg['content']))
                 elif msg['role'] == 'assistant':
                     formatted_history.append(("assistant", msg['content']))
+            
+            print("\nFormatted History:")
+            for role, content in formatted_history:
+                print(f"Role: {role}, Content: {repr(content)}")
 
             # Detect language and use appropriate chain
             lang = self.detect_language(query)
             chain = self.zh_chain if lang == "zh" else self.en_chain
             
-            # Get and log relevant documents
-            retriever = self.vectorstore.as_retriever(search_kwargs={"k": 4})
-            relevant_docs = retriever.get_relevant_documents(query)
-            print(f"\nQuery: {query}")
+            # Get and log relevant documents with detailed analysis
+            print("\n=== Query Analysis ===")
+            print(f"Query: {repr(query)}")
             print(f"Language detected: {lang}")
-            print(f"Found {len(relevant_docs)} relevant documents")
+            print(f"Chat history length: {len(chat_history)} messages")
             
-            for i, doc in enumerate(relevant_docs):
-                print(f"\nDocument {i+1}:")
-                print(f"Content: {doc.page_content[:200]}...")
-                print(f"Metadata: {doc.metadata}")
-                print(f"Score: {doc.metadata.get('score', 'N/A')}")
+            retriever = self.vectorstore.as_retriever(search_kwargs={"k": 8})
+            relevant_docs = retriever.get_relevant_documents(query)
+            
+            print("\n=== Retrieved Documents Analysis ===")
+            print(f"Total documents retrieved: {len(relevant_docs)}")
+            
+            # Group documents by source
+            docs_by_source = {}
+            for doc in relevant_docs:
+                source = doc.metadata.get('filename', 'unknown')
+                if source not in docs_by_source:
+                    docs_by_source[source] = []
+                docs_by_source[source].append(doc)
+            
+            # Print analysis by source
+            print("\n=== Document Sources ===")
+            for source, docs in docs_by_source.items():
+                print(f"\nSource: {source}")
+                print(f"Number of chunks: {len(docs)}")
+                
+                # Print sample content from each chunk
+                for i, doc in enumerate(docs):
+                    print(f"\nChunk {i+1}:")
+                    print(f"Content preview: {doc.page_content[:150]}...")
+                    print(f"Metadata: {doc.metadata}")
+                    if 'score' in doc.metadata:
+                        print(f"Relevance score: {doc.metadata['score']:.3f}")
             
             # Get response using the chain
+            print("\n=== Generating Response ===")
             response = await chain.ainvoke({
                 "input": query,
                 "chat_history": formatted_history,
                 "context": "\n\n".join(doc.page_content for doc in relevant_docs)
             })
+            
+            print("\n=== Response Generated ===")
+            print(f"Response length: {len(response['answer'])} characters")
             
             return response["answer"]
         except Exception as e:
