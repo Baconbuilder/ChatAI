@@ -1,20 +1,12 @@
 // ChatMessage.vue
 <template>
-  <div
-    class="flex"
-    :class="{
-      'justify-end': isUser,
-      'justify-start': !isUser
-    }"
-  >
-    <div
-      class="relative rounded-lg px-4 py-2 text-sm max-w-[80%]"
-      :class="{
-        'bg-blue-600 text-white': isUser,
-        'bg-gray-100 text-gray-900': !isUser
-      }"
-    >
-      <div class="whitespace-pre-wrap">{{ message.content }}</div>
+  <div class="message" :class="{
+    'user': message.role === 'user',
+    'assistant': message.role === 'assistant',
+    'error': message.type === 'error'
+  }">
+    <div class="message-content">
+      {{ message.content }}
     </div>
   </div>
 </template>
@@ -47,26 +39,30 @@ export default {
 <style scoped>
 .message {
   display: flex;
-  padding: 1rem;
+  padding: 0.75rem;
   margin: 0.5rem 0;
-  border-radius: 8px;
-  max-width: 80%;
-}
-
-.message.user {
-  margin-left: auto;
-  background-color: #007AFF;
-  color: white;
-}
-
-.message.assistant {
-  margin-right: auto;
-  background-color: #f0f0f0;
+  border-radius: 12px;
+  max-width: 70%;
+  position: relative;
   color: #333;
 }
 
+.message.user {
+  background-color: #f5f5f5;
+  margin-left: auto;
+  margin-right: 0;
+  border: 1px solid #333;
+}
+
+.message.assistant {
+  background-color: #ffffff;
+  border: 1px solid #e0e0e0;
+  margin-right: auto;
+  margin-left: 0;
+}
+
 .message.error {
-  margin: 0 auto;
+  margin: 1rem auto;
   background-color: #ffebee;
   color: #d32f2f;
   border: 1px solid #ffcdd2;
@@ -92,6 +88,7 @@ export default {
 .message-content {
   white-space: pre-wrap;
   word-break: break-word;
+  line-height: 1.5;
 }
 
 .message-content pre {
@@ -99,10 +96,20 @@ export default {
   padding: 10px;
   border-radius: 5px;
   overflow: auto;
+  margin: 0.5rem 0;
 }
 
 .message-content code {
   font-family: monospace;
+  background-color: rgba(0, 0, 0, 0.05);
+  padding: 0.2em 0.4em;
+  border-radius: 3px;
+  font-size: 0.9em;
+}
+
+/* Add space between consecutive messages */
+.message + .message {
+  margin-top: 0.75rem;
 }
 </style>
 
