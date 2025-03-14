@@ -1,10 +1,25 @@
+# Core FastAPI dependencies
 fastapi==0.109.2
 uvicorn==0.27.1
 sqlalchemy==2.0.27
-python-jose[cryptography]==3.3.0
-passlib[bcrypt]==1.7.4
-bcrypt==4.1.2
+python-jose==3.3.0
+passlib==1.7.4
 python-multipart==0.0.9
-pydantic==2.6.1
-pydantic-settings==2.1.0
-python-dotenv==1.0.1 
+python-dotenv==1.0.1
+pydantic-settings>=2.4.0,<3.0.0
+
+# Langchain ecosystem (specified versions)
+langchain==0.3.18
+langchain-chroma==0.2.2
+langchain-community==0.3.17
+langchain-core==0.3.34
+langchain-ollama==0.2.3
+langchain-openai==0.3.4
+langchain-text-splitters==0.3.6
+
+# Vector store and document processing
+chromadb==0.4.22
+pypdf==3.17.4
+
+# Additional utilities
+python-magic-bin==0.4.14 

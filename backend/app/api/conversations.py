@@ -11,6 +11,7 @@ from app.schemas.conversation import (
 )
 from app.core.auth import get_current_user
 from app.models.user import User
+from app.services.rag_service import rag_service
 
 router = APIRouter()
 
@@ -57,6 +58,7 @@ async def create_message(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
+    # Get conversation and verify ownership
     conversation = db.query(Conversation).filter(
         Conversation.id == conversation_id,
         Conversation.user_id == current_user.id
@@ -74,17 +76,42 @@ async def create_message(
     db.commit()
     db.refresh(db_message)
 
-    # Create assistant message
-    assistant_message = Message(
-        content=f"Echo: {message.content}",
-        role="assistant",
-        conversation_id=conversation_id
-    )
-    db.add(assistant_message)
-    db.commit()
-    db.refresh(assistant_message)
+    # Get conversation history
+    history = db.query(Message).filter(
+        Message.conversation_id == conversation_id
+    ).order_by(Message.created_at.asc()).all()
+    
+    # Format history for RAG service
+    chat_history = [
+        {"role": msg.role, "content": msg.content}
+        for msg in history
+    ]
 
-    return assistant_message
+    try:
+        # Get response from RAG service
+        response_content = await rag_service.get_response(
+            query=message.content,
+            chat_history=chat_history
+        )
+
+        # Create assistant message
+        assistant_message = Message(
+            content=response_content,
+            role="assistant",
+            conversation_id=conversation_id
+        )
+        db.add(assistant_message)
+        db.commit()
+        db.refresh(assistant_message)
+
+        return assistant_message
+    except Exception as e:
+        # Log the error and return a generic error message
+        print(f"Error generating response: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail="An error occurred while generating the response"
+        )
 
 @router.delete("/conversations/{conversation_id}")
 def delete_conversation(
