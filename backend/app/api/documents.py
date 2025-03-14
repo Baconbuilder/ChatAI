@@ -18,7 +18,6 @@ async def upload_document(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    file_path = None
     try:
         # Validate file type
         if not file.filename.lower().endswith('.pdf'):
@@ -36,12 +35,11 @@ async def upload_document(
         unique_filename = f"{uuid.uuid4()}{file_extension}"
         file_path = os.path.join(user_dir, unique_filename)
 
-        # Save the file
-        print(f"Saving file to: {file_path}")
-        with open(file_path, "wb") as buffer:
-            shutil.copyfileobj(file.file, buffer)
-
         try:
+            # Save the file
+            with open(file_path, "wb") as buffer:
+                shutil.copyfileobj(file.file, buffer)
+
             # Process the document using RAG service
             print(f"Processing document: {file_path}")
             documents = rag_service.load_single_document(file_path, file.filename)
@@ -51,40 +49,29 @@ async def upload_document(
             print(f"Document split into chunks: {len(chunks)}")
             
             # Add chunks to vector store
-            print("Adding chunks to vector store...")
             rag_service.vectorstore.add_documents(chunks)
-            
-            # Persist the vector store
-            print("Persisting vector store...")
-            rag_service.vectorstore.persist()
-            
-            print(f"Vector store collection count after update: {rag_service.vectorstore._collection.count()}")
+            print("Chunks added to vector store")
             
             return {
                 "id": str(uuid.uuid4()),
                 "message": "File uploaded and processed successfully",
-                "filename": file.filename,
-                "chunks_added": len(chunks)
+                "filename": file.filename
             }
-            
         except Exception as e:
-            print(f"Error processing document: {str(e)}")
-            print(traceback.format_exc())
-            # Clean up the uploaded file if processing fails
-            if file_path and os.path.exists(file_path):
+            # If processing fails, delete the uploaded file
+            if os.path.exists(file_path):
                 os.remove(file_path)
+            print(f"Document processing error: {str(e)}")
+            print(traceback.format_exc())
             raise HTTPException(
                 status_code=500,
-                detail=f"Error processing document: {str(e)}"
+                detail=f"Error processing document: {str(e)}\n{traceback.format_exc()}"
             )
 
     except Exception as e:
         print(f"Upload error: {str(e)}")
         print(traceback.format_exc())
-        # Clean up the uploaded file if it exists
-        if file_path and os.path.exists(file_path):
-            os.remove(file_path)
         raise HTTPException(
             status_code=500,
-            detail=f"Error uploading file: {str(e)}"
+            detail=f"Error uploading file: {str(e)}\n{traceback.format_exc()}"
         ) 

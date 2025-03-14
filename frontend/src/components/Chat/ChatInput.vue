@@ -44,17 +44,6 @@
         </div>
       </div>
 
-      <div v-if="uploadStatus" class="text-sm mb-2" :class="uploadStatus.type === 'error' ? 'text-red-600' : 'text-green-600'">
-        {{ uploadStatus.message }}
-        <button 
-          v-if="uploadStatus.type === 'error'" 
-          @click="uploadStatus = null"
-          class="ml-2 text-blue-600 hover:text-blue-800"
-        >
-          Dismiss
-        </button>
-      </div>
-
       <textarea
         ref="textarea"
         v-model="message"
@@ -107,41 +96,22 @@ export default {
       if (!files.length) return;
 
       try {
-        uploadStatus.value = { type: 'info', message: 'Uploading and processing files... This may take a moment.' };
+        uploadStatus.value = { type: 'info', message: 'Uploading files...' };
         
         for (const file of files) {
-          // Add file size check
-          const maxSize = 10 * 1024 * 1024; // 10MB
-          if (file.size > maxSize) {
-            uploadStatus.value = { 
-              type: 'error', 
-              message: `File ${file.name} is too large. Maximum size is 10MB.` 
-            };
-            continue;
-          }
-
           const formData = new FormData();
           formData.append('file', file);
           
-          try {
-            const response = await uploadService.uploadPDF(formData);
-            uploadedFiles.value.push({
-              name: file.name,
-              id: response.id
-            });
-            
-            emit('fileUploaded', response);
-          } catch (error) {
-            console.error('Error uploading files:', error);
-            uploadStatus.value = { 
-              type: 'error', 
-              message: error.message || 'Error uploading files. Please try again.' 
-            };
-            return;
-          }
+          const response = await uploadService.uploadPDF(formData);
+          uploadedFiles.value.push({
+            name: file.name,
+            id: response.id
+          });
+          
+          emit('fileUploaded', response);
         }
         
-        uploadStatus.value = { type: 'success', message: 'Files uploaded and processed successfully!' };
+        uploadStatus.value = { type: 'success', message: 'Files uploaded successfully!' };
         event.target.value = ''; // Reset file input
         
         // Add a message about the uploaded files
@@ -149,11 +119,8 @@ export default {
         message.value = `I've uploaded the following PDF(s): ${fileNames}. Please help me understand their content.`;
         
       } catch (error) {
-        console.error('Error in file upload handler:', error);
-        uploadStatus.value = { 
-          type: 'error', 
-          message: error.message || 'Error uploading files. Please try again.' 
-        };
+        console.error('Error uploading files:', error);
+        uploadStatus.value = { type: 'error', message: 'Error uploading files. Please try again.' };
       }
     };
 
