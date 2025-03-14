@@ -9,9 +9,6 @@
   >
     <div class="flex-1 min-w-0">
       <div class="truncate">{{ conversation.title }}</div>
-      <div class="text-xs text-gray-500">
-        {{ formatDate(conversation.updated_at) }}
-      </div>
     </div>
     <button
       class="ml-2 opacity-0 group-hover:opacity-100 p-1 rounded-full hover:bg-gray-200"
@@ -46,30 +43,6 @@ export default {
       default: false
     }
   },
-  emits: ['select', 'delete'],
-  setup() {
-    const formatDate = (dateString) => {
-      const date = new Date(dateString);
-      const now = new Date();
-      const diff = now - date;
-      
-      // If less than 24 hours ago
-      if (diff < 24 * 60 * 60 * 1000) {
-        return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-      }
-      
-      // If less than 7 days ago
-      if (diff < 7 * 24 * 60 * 60 * 1000) {
-        return date.toLocaleDateString([], { weekday: 'short' });
-      }
-      
-      // Otherwise, show the date
-      return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
-    };
-
-    return {
-      formatDate
-    };
-  }
+  emits: ['select', 'delete']
 };
 </script> 

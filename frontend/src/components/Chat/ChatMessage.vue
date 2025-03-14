@@ -15,15 +15,6 @@
       }"
     >
       <div class="whitespace-pre-wrap">{{ message.content }}</div>
-      <div
-        class="mt-1 text-xs"
-        :class="{
-          'text-blue-100': isUser,
-          'text-gray-500': !isUser
-        }"
-      >
-        {{ formatTime(message.createdAt) }}
-      </div>
     </div>
   </div>
 </template>
@@ -46,14 +37,8 @@ export default {
   setup(props) {
     const isUser = computed(() => props.message.userId === props.currentUserId);
 
-    const formatTime = (timestamp) => {
-      const date = new Date(timestamp);
-      return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    };
-
     return {
-      isUser,
-      formatTime
+      isUser
     };
   }
 };

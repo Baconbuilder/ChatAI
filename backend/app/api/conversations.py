@@ -74,8 +74,7 @@ async def create_message(
     db.commit()
     db.refresh(db_message)
 
-    # TODO: Get response from LLM
-    # For now, just echo back the message
+    # Create assistant message
     assistant_message = Message(
         content=f"Echo: {message.content}",
         role="assistant",

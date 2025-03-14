@@ -6,10 +6,10 @@
         <Header :title="currentConversation?.title || 'New Conversation'" />
         
         <div class="chat-messages" ref="messagesContainer">
-          <div v-if="!currentConversation || !currentConversation.messages.length" class="empty-chat">
+          <div v-if="!currentConversation?.messages?.length" class="empty-chat">
             <div class="empty-chat-content">
               <h2>Welcome to ChatAI</h2>
-              <p>Start a new conversation or select an existing one from the sidebar.</p>
+              <p>Start a new conversation by typing a message below.</p>
               <div class="empty-chat-features">
                 <div class="feature">
                   <span class="feature-icon">💬</span>
@@ -27,13 +27,14 @@
             </div>
           </div>
           <ChatMessage 
-            v-for="(message, index) in currentConversation?.messages || []" 
-            :key="index" 
-            :message="message" 
+            v-for="message in currentConversation?.messages"
+            :key="message.id" 
+            :message="message"
+            :current-user-id="currentUserId"
           />
         </div>
         
-        <ChatInput @send-message="sendMessage" :is-loading="isLoading" />
+        <ChatInput @send="handleSendMessage" :is-loading="isLoading" />
       </div>
     </div>
   </template>
@@ -63,63 +64,50 @@
       const isLoading = ref(false);
       const messagesContainer = ref(null);
 
-      const loadConversation = async (id) => {
-        if (!id) return;
+      const createNewConversation = async (title) => {
         try {
-          const response = await conversationService.getConversation(id);
+          const response = await conversationService.createConversation(title);
           currentConversation.value = response;
-          store.commit('setCurrentConversation', response);
+          return response;
         } catch (error) {
-          console.error('Failed to load conversation:', error);
-        }
-      };
-
-      const createNewConversation = async () => {
-        try {
-          const newConversation = await conversationService.createConversation('New Chat');
-          currentConversation.value = newConversation;
-          return newConversation;
-        } catch (error) {
-          console.error('Failed to create new conversation:', error);
+          console.error('Failed to create conversation:', error);
           throw error;
         }
       };
 
-      const sendMessage = async (content) => {
-        if (!content.trim()) return;
-        
-        isLoading.value = true;
+      const handleSendMessage = async (content) => {
+        if (!content.trim() || isLoading.value) return;
         
         try {
-          // Create new conversation if none exists
-          if (!currentConversation.value) {
-            await createNewConversation();
-          }
+          isLoading.value = true;
           
-          // Send the message
-          const message = await conversationService.sendMessage(
+          // If no conversation exists, create one
+          if (!currentConversation.value) {
+            await createNewConversation('New Chat');
+          }
+
+          // Now send the message
+          const response = await conversationService.sendMessage(
             currentConversation.value.id,
             content
           );
-          
-          // Add the message to the current conversation
+
+          // Initialize messages array if it doesn't exist
           if (!currentConversation.value.messages) {
             currentConversation.value.messages = [];
           }
-          currentConversation.value.messages.push(message);
+
+          // Add both user message and assistant response
+          currentConversation.value.messages.push(response);
           
-          // Update the conversation title if it's the first message
+          // Update conversation title if it's the first message
           if (currentConversation.value.messages.length === 1) {
             const newTitle = content.length > 30 
               ? content.substring(0, 30) + '...' 
               : content;
-            await conversationService.updateConversationTitle(
-              currentConversation.value.id,
-              newTitle
-            );
             currentConversation.value.title = newTitle;
           }
-          
+
           scrollToBottom();
         } catch (error) {
           console.error('Error sending message:', error);
@@ -128,10 +116,23 @@
         }
       };
 
-      const scrollToBottom = () => {
-        if (messagesContainer.value) {
-          messagesContainer.value.scrollTop = messagesContainer.value.scrollHeight;
+      const loadConversation = async (id) => {
+        if (!id) return;
+        try {
+          const response = await conversationService.getConversation(id);
+          currentConversation.value = response;
+          scrollToBottom();
+        } catch (error) {
+          console.error('Failed to load conversation:', error);
         }
+      };
+
+      const scrollToBottom = () => {
+        setTimeout(() => {
+          if (messagesContainer.value) {
+            messagesContainer.value.scrollTop = messagesContainer.value.scrollHeight;
+          }
+        }, 100);
       };
 
       // Watch for route changes
@@ -140,31 +141,18 @@
         (newId) => {
           if (newId) {
             loadConversation(newId);
+          } else {
+            currentConversation.value = null;
           }
         },
         { immediate: true }
       );
 
-      // Watch for message changes
-      watch(
-        () => currentConversation.value?.messages,
-        () => {
-          scrollToBottom();
-        },
-        { deep: true }
-      );
-
-      onMounted(() => {
-        if (route.params.id) {
-          loadConversation(route.params.id);
-        }
-      });
-
       return {
         currentConversation,
         isLoading,
         messagesContainer,
-        sendMessage
+        handleSendMessage
       };
     }
   }

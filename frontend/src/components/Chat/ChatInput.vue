@@ -27,20 +27,18 @@
 
 <script>
 import { ref, onMounted, nextTick } from 'vue';
-import { conversationService } from '@/services/conversationService';
 
 export default {
   name: 'ChatInput',
   props: {
-    conversationId: {
-      type: String,
-      required: true
+    isLoading: {
+      type: Boolean,
+      default: false
     }
   },
-  emits: ['message-sent'],
+  emits: ['send'],
   setup(props, { emit }) {
     const message = ref('');
-    const isLoading = ref(false);
     const textarea = ref(null);
 
     const handleEnter = (event) => {
@@ -49,23 +47,12 @@ export default {
     };
 
     const sendMessage = async () => {
-      if (!message.value.trim() || isLoading.value) return;
+      if (!message.value.trim() || props.isLoading) return;
 
-      isLoading.value = true;
-      try {
-        const response = await conversationService.sendMessage(
-          props.conversationId,
-          message.value.trim()
-        );
-        emit('message-sent', response);
-        message.value = '';
-        await nextTick();
-        textarea.value?.focus();
-      } catch (error) {
-        console.error('Failed to send message:', error);
-      } finally {
-        isLoading.value = false;
-      }
+      emit('send', message.value.trim());
+      message.value = '';
+      await nextTick();
+      textarea.value?.focus();
     };
 
     onMounted(() => {
@@ -74,7 +61,6 @@ export default {
 
     return {
       message,
-      isLoading,
       textarea,
       handleEnter,
       sendMessage
