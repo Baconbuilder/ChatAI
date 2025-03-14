@@ -3,12 +3,13 @@
   <div class="chat-input-container">
     <div class="relative flex flex-col gap-2">
       <!-- File upload section -->
-      <div class="flex items-center gap-2">
+      <div class="flex items-center gap-4">
         <input
           type="file"
           ref="fileInput"
           accept=".pdf"
-          class="hidden"
+          class="hidden absolute"
+          style="opacity: 0; width: 0; height: 0;"
           @change="handleFileUpload"
           multiple
         />
@@ -16,31 +17,30 @@
           type="button"
           class="upload-button"
           @click="$refs.fileInput.click()"
-          :disabled="isLoading"
+          :disabled="isLoading || isUploading"
         >
           <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
           </svg>
           Upload PDF
         </button>
-      </div>
-      
-      <!-- Display uploaded files -->
-      <div v-if="uploadedFiles.length > 0" class="uploaded-files">
-        <div class="text-sm text-gray-500 mb-1">Uploaded files:</div>
-        <div class="flex flex-wrap gap-2">
-          <div
-            v-for="file in uploadedFiles"
-            :key="file.name"
-            class="file-tag"
-          >
-            <span>{{ file.name }}</span>
-            <button
-              @click="removeFile(file)"
-              class="text-gray-500 hover:text-red-500"
+        
+        <!-- Display uploaded files inline -->
+        <div v-if="uploadedFiles.length > 0" class="flex items-center gap-2">
+          <div class="flex flex-wrap gap-2">
+            <div
+              v-for="file in uploadedFiles"
+              :key="file.name"
+              class="file-tag"
             >
-              ×
-            </button>
+              <span>{{ file.name }}</span>
+              <button
+                @click="removeFile(file)"
+                class="text-gray-500 hover:text-red-500"
+              >
+                ×
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -58,10 +58,11 @@
         <button
           type="button"
           class="send-button"
-          :disabled="!message.trim() || isLoading"
+          :disabled="!message.trim() || isLoading || isUploading"
           @click="sendMessage"
         >
           <span v-if="isLoading">Sending...</span>
+          <span v-else-if="isUploading">Uploading...</span>
           <span v-else>Send</span>
         </button>
       </div>
@@ -87,6 +88,7 @@ export default {
     const textarea = ref(null);
     const uploadedFiles = ref([]);
     const uploadStatus = ref(null);
+    const isUploading = ref(false);
 
     const handleEnter = (event) => {
       if (event.shiftKey) return;
@@ -98,6 +100,7 @@ export default {
       if (!files.length) return;
 
       try {
+        isUploading.value = true;
         uploadStatus.value = { type: 'info', message: 'Uploading files...' };
         
         for (const file of files) {
@@ -116,13 +119,11 @@ export default {
         uploadStatus.value = { type: 'success', message: 'Files uploaded successfully!' };
         event.target.value = ''; // Reset file input
         
-        // Add a message about the uploaded files
-        // const fileNames = files.map(f => f.name).join(', ');
-        // message.value = `I've uploaded the following PDF(s): ${fileNames}. Please help me understand their content.`;
-        
       } catch (error) {
         console.error('Error uploading files:', error);
         uploadStatus.value = { type: 'error', message: 'Error uploading files. Please try again.' };
+      } finally {
+        isUploading.value = false;
       }
     };
 
@@ -148,6 +149,7 @@ export default {
       textarea,
       uploadedFiles,
       uploadStatus,
+      isUploading,
       handleEnter,
       sendMessage,
       handleFileUpload,
@@ -227,11 +229,13 @@ export default {
   font-weight: 500;
   color: #666;
   transition: all 0.2s;
+  min-width: 120px;
 }
 
-.upload-button:hover:not(:disabled) {
+.upload-button:disabled {
   background-color: #f5f5f5;
-  border-color: #d5d5d5;
+  color: #999;
+  cursor: not-allowed;
 }
 
 .uploaded-files {
