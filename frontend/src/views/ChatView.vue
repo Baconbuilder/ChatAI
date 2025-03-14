@@ -40,7 +40,7 @@
   </template>
   
   <script>
-  import { ref, onMounted, watch } from 'vue';
+  import { ref, onMounted, watch, computed } from 'vue';
   import { useRoute } from 'vue-router';
   import { useStore } from 'vuex';
   import { conversationService } from '@/services/conversationService';
@@ -63,6 +63,8 @@
       const currentConversation = ref(null);
       const isLoading = ref(false);
       const messagesContainer = ref(null);
+
+      const currentUserId = computed(() => String(store.state.auth.user?.id));
 
       const createNewConversation = async (title) => {
         try {
@@ -97,7 +99,17 @@
             currentConversation.value.messages = [];
           }
 
-          // Add both user message and assistant response
+          // Create user message
+          const userMessage = {
+            id: Date.now(), // Temporary ID for frontend display
+            content: content,
+            role: 'user',
+            conversation_id: currentConversation.value.id,
+            created_at: new Date().toISOString()
+          };
+
+          // Add user message and assistant response
+          currentConversation.value.messages.push(userMessage);
           currentConversation.value.messages.push(response);
           
           // Update conversation title if it's the first message
@@ -152,7 +164,8 @@
         currentConversation,
         isLoading,
         messagesContainer,
-        handleSendMessage
+        handleSendMessage,
+        currentUserId
       };
     }
   }

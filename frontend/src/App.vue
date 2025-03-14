@@ -12,7 +12,7 @@ import { useRouter } from 'vue-router';
 const store = useStore();
 const router = useRouter();
 const inactivityTimeout = ref(null);
-const inactivityLimit = 30000; // 30 seconds in milliseconds
+const inactivityLimit = 3000000; // 30 seconds in milliseconds # actual limit is 30000
 
 const setupInactivityTimer = () => {
   // Only setup timer if user is logged in

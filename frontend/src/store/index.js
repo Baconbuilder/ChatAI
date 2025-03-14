@@ -9,32 +9,8 @@ export default createStore({
     auth,
     conversations
   },
-  state: {
-    conversations: {
-      list: [],
-      current: null
-    }
-  },
-  mutations: {
-    setConversations(state, conversations) {
-      state.conversations.list = conversations;
-    },
-    setCurrentConversation(state, conversation) {
-      state.conversations.current = conversation;
-    },
-    addConversation(state, conversation) {
-      state.conversations.list.push(conversation);
-    }
-  },
-  actions: {
-    async loadConversations({ commit }) {
-      try {
-        const conversations = await conversationService.getConversations();
-        commit('setConversations', conversations);
-      } catch (error) {
-        console.error('Failed to load conversations:', error);
-      }
-    }
-  }
+  state: {},
+  mutations: {},
+  actions: {}
 });
 
