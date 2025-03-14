@@ -1,14 +1,25 @@
-import axios from 'axios';
-
-const API_URL = import.meta.env.VITE_API_URL;
+import api from './api';
 
 export const uploadService = {
   async uploadPDF(formData) {
-    const response = await axios.post(`${API_URL}/documents/upload`, formData, {
-      headers: {
-        'Content-Type': 'multipart/form-data'
+    try {
+      const response = await api.post('/documents/upload', formData);
+      return response.data;
+    } catch (error) {
+      console.error('Upload error details:', {
+        message: error.message,
+        response: error.response?.data,
+        status: error.response?.status,
+        code: error.code
+      });
+
+      if (error.code === 'ECONNABORTED') {
+        throw { message: 'Upload timed out. The file might be too large or the server is busy.' };
       }
-    });
-    return response.data;
+
+      throw error.response?.data || { 
+        message: 'Error uploading file. Please try again or contact support if the issue persists.' 
+      };
+    }
   }
 }; 

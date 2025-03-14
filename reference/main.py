@@ -1,5 +1,5 @@
 # main.py
-import gradio as gr
+# import gradio as gr
 from loaders import load_documents, split_documents
 from vectorstore import create_vectorstore
 from chatbot import setup_chatbot, detect_query_language
@@ -52,12 +52,12 @@ def main():
         
         return result["answer"] if isinstance(result, dict) else str(result)
         
-    # Create Gradio interface
-    gr.ChatInterface(
-        chat, 
-        title="Multilingual Document Assistant",
-        description="Ask questions in English or Chinese about your documents"
-    ).launch(inbrowser=True)
+    # # Create Gradio interface
+    # gr.ChatInterface(
+    #     chat, 
+    #     title="Multilingual Document Assistant",
+    #     description="Ask questions in English or Chinese about your documents"
+    # ).launch(inbrowser=True)
 
 
 if __name__ == "__main__":
