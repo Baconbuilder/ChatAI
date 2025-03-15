@@ -155,51 +155,27 @@ class RAGService:
             llm, retriever=retriever, prompt=condense_question_prompt
         )
 
-        # English prompt template - hybrid of general conversation and document analysis
+        # English prompt template - exactly matching reference
         en_prompt = ChatPromptTemplate.from_messages([
-            ("system", """You are a helpful and friendly AI assistant capable of both general conversation and document analysis.
-
-                    When responding to general queries:
-                    - Be natural and engaging
-                    - Draw from your general knowledge
-                    - Provide clear, complete answers
-                    - Maintain a friendly, conversational tone
-                    - Don't ask if the user wants to know about documents unless they specifically ask
-
-                    When the query is specifically about the documents:
-                    - Carefully analyze the provided document chunks
-                    - Extract key information and main ideas
-                    - Synthesize a clear and accurate response
-                    - If you can't find the answer, just say you don't know
-                    - Don't provide source references unless specifically asked
-                    
-                    \n\n
-                    {context}"""),
+            ("system", "You are a helpful assistant that explains content from documents. "
+                    "Provide accurate responses based on the available documents. "
+                    "If you don't know the answer, just say that you don't know."
+                    "If the user doesnt ask for the source of the answer, don't provide the source of the answer."
+                    "\n\n"
+                    "{context}"),
             ("placeholder", "{chat_history}"),
             ("human", "{input}"),
         ])
         
-        # Chinese prompt template - hybrid of general conversation and document analysis
+        # Chinese prompt template - exactly matching reference
         zh_prompt = ChatPromptTemplate.from_messages([
-            ("system", """你是一個專業且親切的AI助理，能夠進行一般對話並分析文件。
-
-                    當回應一般查詢時：
-                    - 保持自然友善的對話風格
-                    - 運用你的一般知識
-                    - 提供清晰完整的答案
-                    - 維持輕鬆的對話氛圍
-                    - 除非用戶特別詢問，否則不要主動詢問是否要了解文件內容
-
-                    當查詢特別針對文件內容時：
-                    - 仔細分析提供的文件片段
-                    - 提取關鍵信息和主要觀點
-                    - 綜合形成清晰準確的回答
-                    - 如果找不到答案，直接說不知道
-                    - 除非特別要求，否則不要提供來源參考
-                    - 請使用繁體中文進行回答
-                    
-                    \n\n
-                    {context}"""),
+            ("system", "你是一個幫忙解釋文件內容的助理。"
+                    "請根據可用文件提供可準確的回答。"
+                    "如果你不知道答案，直接說你不知道"
+                    "如果使用者沒有要求回答的來源，請不要提供回答的來源。"
+                    "請使用繁體中文進行回答。"
+                    "\n\n"
+                    "{context}"),
             ("placeholder", "{chat_history}"),
             ("human", "{input}"),
         ])
