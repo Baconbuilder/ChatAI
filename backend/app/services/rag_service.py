@@ -1,5 +1,6 @@
 from langchain_ollama import ChatOllama, OllamaEmbeddings
 from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.messages import HumanMessage, AIMessage
 from langchain.chains import create_history_aware_retriever, create_retrieval_chain
 from langchain.chains.combine_documents import create_stuff_documents_chain
 from langchain_community.document_loaders import PyPDFLoader, DirectoryLoader
@@ -10,14 +11,14 @@ import os
 import traceback
 import glob
 
-# Configuration
+# Configuration - Exactly matching reference implementation
 MODEL_NAME = "llama3.2:latest"
 TEMPERATURE = 0.5
 EMBEDDING_MODEL = "snowflake-arctic-embed2"
-CHUNK_SIZE = 1024
-CHUNK_OVERLAP = 256
-ZH_CHUNK_SIZE = 768
-ZH_CHUNK_OVERLAP = 192
+CHUNK_SIZE = 512
+CHUNK_OVERLAP = 50
+ZH_CHUNK_SIZE = 384
+ZH_CHUNK_OVERLAP = 75
 
 class RAGService:
     def __init__(self):
@@ -46,18 +47,12 @@ class RAGService:
             documents = loader.load()
             print(f"Document loaded successfully, pages: {len(documents)}")
             
-            # Add metadata to each page
             processed_docs = []
             for doc in documents:
-                # Skip empty pages
                 if not doc.page_content.strip():
                     continue
-                    
-                # Skip pages that only contain common headers/footers
                 if len(doc.page_content.split()) < 10:
                     continue
-                    
-                # Add metadata
                 doc = self.add_metadata(doc, filename)
                 processed_docs.append(doc)
                 
@@ -70,16 +65,16 @@ class RAGService:
             raise Exception(error_msg)
 
     def split_documents(self, documents):
-        """Split documents into chunks based on language with improved handling"""
+        """Split documents into chunks based on language"""
         try:
-            # Group documents by language
+            # Group documents by language - exactly matching reference
             en_docs = [doc for doc in documents if doc.metadata.get("language") == "en"]
             zh_docs = [doc for doc in documents if doc.metadata.get("language") == "zh"]
             other_docs = [doc for doc in documents if doc.metadata.get("language") not in ["en", "zh"]]
             
             print(f"Documents by language - EN: {len(en_docs)}, ZH: {len(zh_docs)}, Other: {len(other_docs)}")
             
-            # Configure language-specific splitters
+            # Configure language-specific splitters - exactly matching reference
             en_splitter = RecursiveCharacterTextSplitter(
                 chunk_size=CHUNK_SIZE,
                 chunk_overlap=CHUNK_OVERLAP,
@@ -92,22 +87,14 @@ class RAGService:
                 separators=["\n\n", "\n", "。", "，", "、", " ", ""]
             )
             
-            # Split and combine results with error handling
             result_docs = []
             if en_docs:
-                en_chunks = en_splitter.split_documents(en_docs)
-                print(f"English chunks created: {len(en_chunks)}")
-                result_docs.extend(en_chunks)
+                result_docs.extend(en_splitter.split_documents(en_docs))
             if zh_docs:
-                zh_chunks = zh_splitter.split_documents(zh_docs)
-                print(f"Chinese chunks created: {len(zh_chunks)}")
-                result_docs.extend(zh_chunks)
+                result_docs.extend(zh_splitter.split_documents(zh_docs))
             if other_docs:
-                other_chunks = en_splitter.split_documents(other_docs)
-                print(f"Other language chunks created: {len(other_chunks)}")
-                result_docs.extend(other_chunks)
+                result_docs.extend(en_splitter.split_documents(other_docs))
             
-            print(f"Total chunks created: {len(result_docs)}")
             return result_docs
         except Exception as e:
             error_msg = f"Error splitting documents: {str(e)}"
@@ -117,220 +104,149 @@ class RAGService:
 
     def setup_rag(self):
         """Initialize the RAG system"""
-        # Initialize embeddings
         embeddings = OllamaEmbeddings(model=EMBEDDING_MODEL)
-        
-        # Load or create vector store
         vector_db_path = os.path.join(os.path.dirname(__file__), '..', '..', 'vector_db')
         
         try:
             print("Loading vector store...")
-            # Clear existing collection if it exists
             if os.path.exists(vector_db_path):
                 print("Clearing existing vector store...")
                 Chroma(persist_directory=vector_db_path, embedding_function=embeddings).delete_collection()
             
-            # Create new empty vector store
-            self.vectorstore = Chroma(persist_directory=vector_db_path, embedding_function=embeddings)
+            # Create vector store - matching reference implementation
+            self.vectorstore = Chroma(
+                persist_directory=vector_db_path,
+                embedding_function=embeddings
+            )
             print("Vector store initialized")
         except Exception as e:
             print(f"Error initializing vector store: {str(e)}")
             print(traceback.format_exc())
             raise
 
-        # Initialize LLM with specific parameters for better comprehension
+        # Initialize LLM - exactly matching reference
         llm = ChatOllama(
             temperature=TEMPERATURE,
-            model=MODEL_NAME,
-            top_k=10,  # Increase number of tokens considered
-            top_p=0.9,  # Slightly more focused sampling
-            repeat_penalty=1.1  # Slight penalty for repetition
+            model=MODEL_NAME
         )
         
-        # Setup retriever with MMR search
-        retriever = self.vectorstore.as_retriever(
-            search_type="mmr",  # Use MMR for better diversity
-            search_kwargs={
-                "k": 8,  # Increased number of retrieved documents
-                "fetch_k": 30,  # Consider more candidates
-                "lambda_mult": 0.9  # Strong focus on relevance to current query
-            }
+        # Setup retriever - exactly matching reference
+        retriever = self.vectorstore.as_retriever(search_kwargs={"k": 4})
+        
+        # Setup question condenser - exactly matching reference
+        condense_question_system_template = (
+            "Given a chat history and the latest user question "
+            "which might reference context in the chat history, "
+            "formulate a standalone question which can be understood "
+            "without the chat history. Do NOT answer the question, "
+            "just reformulate it if needed and otherwise return it as is."
         )
-        
-        # Setup question condenser with improved prompt
-        condense_template = """Given the chat history and the latest user question, create a standalone question.
-        IMPORTANT: Each question should be treated independently, even if similar topics were discussed before.
-        DO NOT reference previous questions or indicate that a topic has been discussed before.
-        
-        The standalone question should:
-        1. Focus ONLY on the current question
-        2. Be specific and detailed
-        3. Focus on extracting factual information
-        4. NEVER mention or reference previous questions
-        5. NEVER use phrases like "again", "as mentioned", or similar
-        
-        Chat History: {chat_history}
-        Latest Question: {input}
-        
-        Standalone question:"""
 
-        condense_prompt = ChatPromptTemplate.from_messages([
-            ("system", condense_template),
-            ("human", "{input}"),
-        ])
+        condense_question_prompt = ChatPromptTemplate.from_messages(
+            [
+                ("system", condense_question_system_template),
+                ("placeholder", "{chat_history}"),
+                ("human", "{input}"),
+            ]
+        )
 
-        # Create history-aware retriever
+        # Create history-aware retriever - exactly matching reference
         history_aware_retriever = create_history_aware_retriever(
-            llm, retriever=retriever, prompt=condense_prompt
+            llm, retriever=retriever, prompt=condense_question_prompt
         )
 
-        # Setup language-specific chains with improved prompts
+        # English prompt template - hybrid of general conversation and document analysis
         en_prompt = ChatPromptTemplate.from_messages([
             ("system", """You are a helpful and friendly AI assistant capable of both general conversation and document analysis.
 
                     When responding to general queries:
-                    - Be natural but professional
+                    - Be natural and engaging
                     - Draw from your general knowledge
                     - Provide clear, complete answers
-                    - End responses definitively without asking questions
-                    - Avoid phrases like "Does that make sense?" or "Does that help?"
+                    - Maintain a friendly, conversational tone
+                    - Don't ask if the user wants to know about documents unless they specifically ask
 
-                    When the query is specifically about the documents in the context:
-                    1. Carefully analyze the provided document chunks
-                    2. Extract key information and main ideas
-                    3. Synthesize a clear and accurate response
-                    4. Focus on academic and technical details when present
-                    5. End with a clear conclusion, not a question
+                    When the query is specifically about the documents:
+                    - Carefully analyze the provided document chunks
+                    - Extract key information and main ideas
+                    - Synthesize a clear and accurate response
+                    - If you can't find the answer, just say you don't know
+                    - Don't provide source references unless specifically asked
                     
-                    Document Context (only use when query is about documents):
+                    \n\n
                     {context}"""),
             ("placeholder", "{chat_history}"),
             ("human", "{input}"),
         ])
         
+        # Chinese prompt template - hybrid of general conversation and document analysis
         zh_prompt = ChatPromptTemplate.from_messages([
-            ("system", """你是一個專業且樂於助人的AI助理，能夠進行一般對話並分析文件。
+            ("system", """你是一個專業且親切的AI助理，能夠進行一般對話並分析文件。
 
                     當回應一般查詢時：
-                    - 保持自然但專業的語氣
+                    - 保持自然友善的對話風格
                     - 運用你的一般知識
                     - 提供清晰完整的答案
-                    - 以明確的結論結束，不要提問
-                    - 避免使用「明白嗎？」或「有幫助嗎？」等問句
+                    - 維持輕鬆的對話氛圍
+                    - 除非用戶特別詢問，否則不要主動詢問是否要了解文件內容
 
                     當查詢特別針對文件內容時：
-                    1. 仔細分析提供的文件片段
-                    2. 提取關鍵信息和主要觀點
-                    3. 綜合形成清晰準確的回答
-                    4. 注重學術和技術細節
-                    5. 以明確的結論結束
+                    - 仔細分析提供的文件片段
+                    - 提取關鍵信息和主要觀點
+                    - 綜合形成清晰準確的回答
+                    - 如果找不到答案，直接說不知道
+                    - 除非特別要求，否則不要提供來源參考
+                    - 請使用繁體中文進行回答
                     
-                    文件上下文（僅在查詢與文件相關時使用）：
+                    \n\n
                     {context}"""),
             ("placeholder", "{chat_history}"),
             ("human", "{input}"),
         ])
 
-        # Create document chains with temperature adjustment for different types of queries
-        en_document_chain = create_stuff_documents_chain(
-            ChatOllama(
-                temperature=0.3,  # Lower temperature for document-specific queries
-                model=MODEL_NAME,
-                top_k=10,
-                top_p=0.9,
-                repeat_penalty=1.1
-            ), 
-            en_prompt
-        )
-        zh_document_chain = create_stuff_documents_chain(
-            ChatOllama(
-                temperature=0.3,  # Lower temperature for document-specific queries
-                model=MODEL_NAME,
-                top_k=10,
-                top_p=0.9,
-                repeat_penalty=1.1
-            ), 
-            zh_prompt
-        )
+        # Create document chains - exactly matching reference
+        en_document_chain = create_stuff_documents_chain(llm, en_prompt)
+        zh_document_chain = create_stuff_documents_chain(llm, zh_prompt)
         
-        # Create retrieval chains
+        # Create retrieval chains - exactly matching reference
         self.en_chain = create_retrieval_chain(history_aware_retriever, en_document_chain)
         self.zh_chain = create_retrieval_chain(history_aware_retriever, zh_document_chain)
 
+    def add_documents(self, documents):
+        """Add documents to the vector store using the reference implementation method"""
+        try:
+            return self.vectorstore.add_documents(documents)
+        except Exception as e:
+            print(f"Error adding documents: {str(e)}")
+            print(traceback.format_exc())
+            raise Exception(f"Failed to add documents: {str(e)}")
+
     async def get_response(self, query: str, chat_history: list = None) -> str:
-        """Get response from the appropriate chain based on query language with improved debugging"""
+        """Get response from the appropriate chain based on query language"""
         if chat_history is None:
             chat_history = []
         
         try:
-            print("\n=== Debug Information ===")
-            print(f"Raw query: {repr(query)}")
-            print("\nChat History:")
-            for msg in chat_history:
-                print(f"Role: {msg['role']}, Content: {repr(msg['content'])}")
-            
-            # Format chat history for LangChain
+            # Format chat history using langchain Message objects - matching reference
             formatted_history = []
             for msg in chat_history:
                 if msg['role'] == 'user':
-                    formatted_history.append(("human", msg['content']))
+                    formatted_history.append(HumanMessage(content=msg['content']))
                 elif msg['role'] == 'assistant':
-                    formatted_history.append(("assistant", msg['content']))
-            
-            print("\nFormatted History:")
-            for role, content in formatted_history:
-                print(f"Role: {role}, Content: {repr(content)}")
+                    formatted_history.append(AIMessage(content=msg['content']))
 
-            # Detect language and use appropriate chain
+            # Detect language and use appropriate chain - exactly matching reference
             lang = self.detect_language(query)
             chain = self.zh_chain if lang == "zh" else self.en_chain
             
-            # Get and log relevant documents with detailed analysis
-            print("\n=== Query Analysis ===")
-            print(f"Query: {repr(query)}")
-            print(f"Language detected: {lang}")
-            print(f"Chat history length: {len(chat_history)} messages")
-            
-            retriever = self.vectorstore.as_retriever(search_kwargs={"k": 8})
-            relevant_docs = retriever.get_relevant_documents(query)
-            
-            print("\n=== Retrieved Documents Analysis ===")
-            print(f"Total documents retrieved: {len(relevant_docs)}")
-            
-            # Group documents by source
-            docs_by_source = {}
-            for doc in relevant_docs:
-                source = doc.metadata.get('filename', 'unknown')
-                if source not in docs_by_source:
-                    docs_by_source[source] = []
-                docs_by_source[source].append(doc)
-            
-            # Print analysis by source
-            print("\n=== Document Sources ===")
-            for source, docs in docs_by_source.items():
-                print(f"\nSource: {source}")
-                print(f"Number of chunks: {len(docs)}")
-                
-                # Print sample content from each chunk
-                for i, doc in enumerate(docs):
-                    print(f"\nChunk {i+1}:")
-                    print(f"Content preview: {doc.page_content[:150]}...")
-                    print(f"Metadata: {doc.metadata}")
-                    if 'score' in doc.metadata:
-                        print(f"Relevance score: {doc.metadata['score']:.3f}")
-            
             # Get response using the chain
-            print("\n=== Generating Response ===")
-            response = await chain.ainvoke({
+            result = await chain.ainvoke({
                 "input": query,
-                "chat_history": formatted_history,
-                "context": "\n\n".join(doc.page_content for doc in relevant_docs)
+                "chat_history": formatted_history
             })
             
-            print("\n=== Response Generated ===")
-            print(f"Response length: {len(response['answer'])} characters")
-            
-            return response["answer"]
+            # Handle response with type checking - matching reference
+            return result["answer"] if isinstance(result, dict) else str(result)
         except Exception as e:
             error_msg = f"Error in get_response: {str(e)}"
             print(error_msg)
