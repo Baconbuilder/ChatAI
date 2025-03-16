@@ -72,6 +72,7 @@
 
 <script>
 import { ref, onMounted, nextTick } from 'vue';
+import { useStore } from 'vuex';
 import { uploadService } from '@/services/uploadService';
 
 export default {
@@ -80,10 +81,16 @@ export default {
     isLoading: {
       type: Boolean,
       default: false
+    },
+    conversationId: {
+      type: [String, Number],
+      required: true,
+      default: null
     }
   },
   emits: ['send', 'fileUploaded'],
   setup(props, { emit }) {
+    const store = useStore();
     const message = ref('');
     const textarea = ref(null);
     const uploadedFiles = ref([]);
@@ -100,6 +107,13 @@ export default {
       if (!files.length) return;
 
       try {
+        // If no conversation exists, create one first
+        let currentConversationId = props.conversationId;
+        if (!currentConversationId) {
+          const newConversation = await store.dispatch('chat/createConversation', 'New Chat');
+          currentConversationId = newConversation.id;
+        }
+
         isUploading.value = true;
         uploadStatus.value = { type: 'info', message: 'Uploading files...' };
         
@@ -107,7 +121,7 @@ export default {
           const formData = new FormData();
           formData.append('file', file);
           
-          const response = await uploadService.uploadPDF(formData);
+          const response = await uploadService.uploadPDF(formData, currentConversationId);
           uploadedFiles.value.push({
             name: file.name,
             id: response.id

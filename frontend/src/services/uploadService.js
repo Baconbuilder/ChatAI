@@ -1,8 +1,10 @@
 import api from './api';
 
 export const uploadService = {
-  async uploadPDF(formData) {
+  async uploadPDF(formData, conversationId) {
     try {
+      formData.append('conversation_id', conversationId);
+      
       const response = await api.post('/documents/upload', formData, {
         headers: {
           'Content-Type': 'multipart/form-data',

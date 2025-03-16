@@ -90,6 +90,7 @@ async def create_message(
     try:
         # Get response from RAG service
         response_content = await rag_service.get_response(
+            conversation_id=str(conversation_id),  # Convert to string since we're using it as a key
             query=message.content,
             chat_history=chat_history
         )
@@ -125,6 +126,12 @@ def delete_conversation(
     ).first()
     if not conversation:
         raise HTTPException(status_code=404, detail="Conversation not found")
+    
+    # Clean up RAG resources before deleting the conversation
+    try:
+        rag_service.cleanup_conversation(str(conversation_id))
+    except Exception as e:
+        print(f"Warning: Failed to clean up RAG resources for conversation {conversation_id}: {str(e)}")
     
     db.delete(conversation)
     db.commit()

@@ -34,7 +34,11 @@
           />
         </div>
         
-        <ChatInput @send="handleSendMessage" :is-loading="isLoading" />
+        <ChatInput 
+          @send="handleSendMessage" 
+          :is-loading="isLoading"
+          :conversation-id="currentConversation?.id"
+        />
       </div>
     </div>
   </template>
