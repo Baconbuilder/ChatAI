@@ -136,11 +136,41 @@ class RAGService:
             
             # Setup question condenser
             condense_question_system_template = (
-                "Given a chat history and the latest user question "
-                "which might reference context in the chat history, "
-                "formulate a standalone question which can be understood "
-                "without the chat history. Do NOT answer the question, "
-                "just reformulate it if needed and otherwise return it as is."
+                """You are a bilingual (English/Chinese) conversation assistant. Your task is to handle the chat history and latest question while being language-aware.
+
+                Core Tasks:
+                1. Identify the language of the current question (English/Chinese)
+                2. Analyze the chat history in both languages
+                3. Determine if this is a new question or truly a duplicate
+                4. Handle context appropriately based on language patterns
+
+                Guidelines for Question Processing:
+                1. For English questions:
+                   - Consider both English and Chinese context from history
+                   - Reformulate while maintaining English grammar and structure
+                   - Preserve any technical terms or proper nouns exactly as given
+
+                2. For Chinese questions (中文問題處理):
+                   - 同時考慮歷史中的中文和英文上下文
+                   - 保持中文的語言習慣來重新表述
+                   - 保留專有名詞的原始形式
+
+                3. For questions that reference previous context:
+                   - Include relevant context from both languages
+                   - Maintain the current question's language in reformulation
+                   - Preserve cross-language references when needed
+
+                4. Duplicate Detection:
+                   - Only mark as duplicate if exactly the same information is requested
+                   - Consider language-specific variations as distinct questions
+                   - A question asking for the same info in a different language is still a new question
+
+                Output:
+                - If it's a new question: Return the reformulated question in its original language
+                - If it's truly a duplicate: Return "DUPLICATE: [original question]"
+                - If it needs context: Return the reformulated question with necessary context
+                
+                Remember: Do NOT answer the question, just reformulate if needed or return as is."""
             )
 
             condense_question_prompt = ChatPromptTemplate.from_messages([
@@ -158,12 +188,19 @@ class RAGService:
             en_prompt = ChatPromptTemplate.from_messages([
                 ("system", """You are a helpful and friendly AI assistant capable of both general conversation and document analysis.
 
+                        Core principles:
+                        1. Never make up information or statistics
+                        2. If you don't know something, simply say so
+                        3. Only reference information from the provided documents or chat history
+                        4. Be consistent with previous responses
+                        5. If correcting a previous response, acknowledge the correction
+
                         When responding to general queries:
                         - Be natural and engaging
-                        - Draw from your general knowledge
-                        - Provide clear, complete answers
+                        - Draw from the provided documents only
+                        - If information isn't in the documents, say "I don't have information about that"
                         - Maintain a friendly, conversational tone
-                        - Don't ask if the user wants to know about documents unless they specifically ask
+                        - Don't ask if the user wants to know about documents
 
                         When the query is specifically about the documents:
                         - Carefully analyze the provided document chunks
@@ -181,10 +218,17 @@ class RAGService:
             zh_prompt = ChatPromptTemplate.from_messages([
                 ("system", """你是一個專業且親切的AI助理，能夠進行一般對話並分析文件。
 
+                        核心原則：
+                        1. 絕不編造資訊或統計數據
+                        2. 如果不知道答案，就直接說不知道
+                        3. 只使用提供的文件或對話歷史中的資訊
+                        4. 保持回答的一致性
+                        5. 如果需要更正先前的回答，要明確說明
+
                         當回應一般查詢時：
                         - 保持自然友善的對話風格
-                        - 運用你的一般知識
-                        - 提供清晰完整的答案
+                        - 只使用提供的文件資訊
+                        - 如果文件中沒有相關資訊，就說「我沒有這方面的資訊」
                         - 維持輕鬆的對話氛圍
                         - 除非用戶特別詢問，否則不要主動詢問是否要了解文件內容
 
@@ -278,6 +322,18 @@ class RAGService:
                 elif msg['role'] == 'assistant':
                     formatted_history.append(AIMessage(content=msg['content']))
 
+            # Add logging for question processing
+            print("\n=== Question Processing ===")
+            print(f"Original question: {query}")
+            print("Chat history length:", len(chat_history))
+            print("Formatted history length:", len(formatted_history))
+            
+            # Log the last few messages from history if they exist
+            if chat_history:
+                print("\nRecent chat context:")
+                for msg in chat_history[-3:]:  # Show last 3 messages
+                    print(f"[{msg['role']}]: {msg['content'][:100]}...")  # Truncate long messages
+            
             # Detect language and use appropriate chain
             lang = self.detect_language(query)
             chain = self.chains[conversation_id]["zh" if lang == "zh" else "en"]

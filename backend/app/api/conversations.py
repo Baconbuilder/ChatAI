@@ -78,7 +78,8 @@ async def create_message(
 
     # Get conversation history
     history = db.query(Message).filter(
-        Message.conversation_id == conversation_id
+        Message.conversation_id == conversation_id,
+        Message.id != db_message.id  # Exclude the current message
     ).order_by(Message.created_at.asc()).all()
     
     # Format history for RAG service
