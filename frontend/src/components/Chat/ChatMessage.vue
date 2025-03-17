@@ -5,7 +5,9 @@
     'assistant': message.role === 'assistant',
     'error': message.type === 'error'
   }">
-    <div class="message-content" v-if="isImageContent" v-html="message.content"></div>
+    <div class="message-content" v-if="isImageContent">
+      <img :src="fullImageUrl" alt="Generated image" class="generated-image" @click="handleImageClick" />
+    </div>
     <div class="message-content" v-else>{{ message.content }}</div>
   </div>
 </template>
@@ -27,14 +29,45 @@ export default {
   },
   setup(props) {
     const isUser = computed(() => props.message.userId === props.currentUserId);
-    const isImageContent = computed(() => 
-      props.message.content.includes('<img') && 
-      props.message.content.includes('data:image/png;base64,')
-    );
+    
+    const isImageContent = computed(() => {
+      const content = props.message.content;
+      return content && (
+        content.includes('<img') || 
+        content.includes('/static/images/')
+      );
+    });
+
+    const imageUrl = computed(() => {
+      if (!isImageContent.value) return '';
+      const content = props.message.content;
+      // Extract URL from img tag if present
+      const imgMatch = content.match(/src="([^"]+)"/);
+      if (imgMatch) return imgMatch[1];
+      // If no img tag, return the content directly
+      return content;
+    });
+
+    const fullImageUrl = computed(() => {
+      if (!imageUrl.value) return '';
+      // If the URL already starts with http, return it as is
+      if (imageUrl.value.startsWith('http')) return imageUrl.value;
+      // Otherwise, prepend the API URL
+      return `${import.meta.env.VITE_API_URL.replace('/api', '')}${imageUrl.value}`;
+    });
+
+    const handleImageClick = () => {
+      if (fullImageUrl.value) {
+        window.open(fullImageUrl.value, '_blank');
+      }
+    };
 
     return {
       isUser,
-      isImageContent
+      isImageContent,
+      imageUrl,
+      fullImageUrl,
+      handleImageClick
     };
   }
 };
@@ -95,10 +128,19 @@ export default {
   line-height: 1.5;
 }
 
-.message-content :deep(img) {
+.generated-image {
   max-width: 100%;
+  max-height: 400px;
   border-radius: 8px;
   margin: 8px 0;
+  cursor: pointer;
+  transition: transform 0.2s;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.generated-image:hover {
+  transform: scale(1.02);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
 }
 
 .message-content pre {

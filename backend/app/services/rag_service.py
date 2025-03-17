@@ -21,6 +21,8 @@ import base64
 from io import BytesIO
 from openai import OpenAI
 from dotenv import load_dotenv
+import uuid
+import openai
 
 # Configuration - Exactly matching reference implementation
 MODEL_NAME = "llama3.2:latest"
@@ -39,9 +41,11 @@ class RAGService:
     def __init__(self):
         self.vectorstores = {}  # Dictionary to store vectorstores by conversation_id
         self.chains = {}  # Dictionary to store chains by conversation_id
-        self.embeddings = OllamaEmbeddings(model=MODEL_NAME)
+        self.embeddings = OllamaEmbeddings(model=EMBEDDING_MODEL)
         self.base_vector_path = os.path.join(os.path.dirname(__file__), '..', '..', 'vector_db')
         self.openai_client = OpenAI()
+        self.images_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'static', 'images')
+        os.makedirs(self.images_dir, exist_ok=True)
         
         # Create base vector store directory if it doesn't exist
         if not os.path.exists(self.base_vector_path):
@@ -319,22 +323,37 @@ class RAGService:
             print(traceback.format_exc())
             raise Exception(f"Failed to add documents: {str(e)}")
 
-    async def generate_image(self, prompt: str) -> Optional[str]:
-        """Generate an image using DALL-E and return base64 encoded image"""
+    async def generate_image(self, prompt: str) -> str:
+        """Generate an image using DALL-E"""
         try:
+            # Generate image using DALL-E
             response = self.openai_client.images.generate(
-                model="dall-e-3",
+                model="dall-e-2",
                 prompt=prompt,
-                size="1024x1024",
+                size="256x256",
                 n=1,
                 response_format="b64_json"
             )
-            return response.data[0].b64_json
+            
+            # Get the base64 image data
+            image_data = response.data[0].b64_json
+            
+            # Generate a unique filename
+            filename = f"{uuid.uuid4()}.png"
+            
+            # Save the image to the static directory
+            image_path = os.path.join(self.images_dir, filename)
+            with open(image_path, "wb") as f:
+                f.write(base64.b64decode(image_data))
+            
+            # Return the URL path
+            return f"/static/images/{filename}"
+            
         except Exception as e:
             error_msg = f"Error generating image: {str(e)}"
             print(error_msg)
             print(traceback.format_exc())
-            raise Exception(error_msg)
+            raise 
 
     async def get_response(self, conversation_id: str, query: str, chat_history: list = None, is_image_generation: bool = False) -> str:
         """Get response from the appropriate chain based on query language or generate image"""
@@ -343,18 +362,12 @@ class RAGService:
         
         try:
             if is_image_generation:
-                image_base64 = await self.generate_image(query)
-                return f"<image>{image_base64}</image>"
+                image_url = await self.generate_image(query)
+                return f"<img src=\"{image_url}\" alt=\"Generated image\" class=\"generated-image\" />"
             
             # Initialize RAG for this conversation if not already done
             if conversation_id not in self.chains:
                 self.setup_rag(conversation_id)
-            
-            print("\n=== Chat History Before Query ===")
-            print(f"Conversation ID: {conversation_id}")
-            for msg in chat_history:
-                print(f"[{msg['role']}]: {msg['content']}")
-            print(f"\n[Current Query]: {query}")
             
             # Format chat history using langchain Message objects
             formatted_history = []
@@ -364,18 +377,6 @@ class RAGService:
                 elif msg['role'] == 'assistant':
                     formatted_history.append(AIMessage(content=msg['content']))
 
-            # Add logging for question processing
-            print("\n=== Question Processing ===")
-            print(f"Original question: {query}")
-            print("Chat history length:", len(chat_history))
-            print("Formatted history length:", len(formatted_history))
-            
-            # Log the last few messages from history if they exist
-            if chat_history:
-                print("\nRecent chat context:")
-                for msg in chat_history[-3:]:  # Show last 3 messages
-                    print(f"[{msg['role']}]: {msg['content'][:100]}...")  # Truncate long messages
-            
             # Detect language and use appropriate chain
             lang = self.detect_language(query)
             chain = self.chains[conversation_id]["zh" if lang == "zh" else "en"]
@@ -388,14 +389,6 @@ class RAGService:
             
             # Get the response
             response = result["answer"] if isinstance(result, dict) else str(result)
-            
-            print("\n=== Chat History After Response ===")
-            print(f"Conversation ID: {conversation_id}")
-            for msg in chat_history:
-                print(f"[{msg['role']}]: {msg['content']}")
-            print(f"[user]: {query}")
-            print(f"[assistant]: {response}")
-            print("===========================\n")
             
             return response
         except Exception as e:
