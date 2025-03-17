@@ -69,7 +69,7 @@
       const currentUserId = computed(() => String(store.state.auth.user?.id));
       const currentConversation = computed(() => store.state.chat.currentConversation);
 
-      const handleSendMessage = async (content) => {
+      const handleSendMessage = async ({ content, isImageGeneration }) => {
         if (!content.trim() || isLoading.value) return;
         
         let temporaryMessageId = null;
@@ -102,7 +102,8 @@
           // Send the message and get response
           const response = await store.dispatch('chat/sendMessage', {
             conversationId: currentConversation.value.id,
-            content: content
+            content: content,
+            isImageGeneration: isImageGeneration
           });
 
           // Update conversation title if it's the first message
@@ -115,6 +116,19 @@
               title: newTitle
             });
           }
+
+          // If this is an image response, display it properly
+          if (response.content.startsWith('<image>') && response.content.endsWith('</image>')) {
+            const base64Image = response.content.replace('<image>', '').replace('</image>', '');
+            response.content = `<img src="data:image/png;base64,${base64Image}" alt="Generated image" class="generated-image" />`;
+          }
+
+          // Add assistant message
+          await store.commit('chat/ADD_MESSAGE', {
+            conversationId: currentConversation.value.id,
+            message: response
+          });
+          scrollToBottom();
 
         } catch (error) {
           console.error('Error sending message:', error);

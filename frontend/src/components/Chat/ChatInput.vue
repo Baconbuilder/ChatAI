@@ -2,7 +2,7 @@
 <template>
   <div class="chat-input-container">
     <div class="relative flex flex-col gap-2">
-      <!-- File upload section -->
+      <!-- File upload and image generation section -->
       <div class="flex items-center gap-4">
         <input
           type="file"
@@ -23,6 +23,19 @@
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
           </svg>
           Upload PDF
+        </button>
+
+        <button
+          type="button"
+          class="upload-button"
+          :class="{ 'active': isImageMode }"
+          @click="toggleImageMode"
+          :disabled="isLoading || isUploading"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+          </svg>
+          {{ isImageMode ? 'Image Mode' : 'Chat Mode' }}
         </button>
         
         <!-- Display uploaded files inline -->
@@ -52,7 +65,7 @@
           v-model="message"
           rows="3"
           class="message-input"
-          placeholder="Type your message..."
+          :placeholder="isImageMode ? 'Describe the image you want to generate...' : 'Type your message...'"
           @keydown.enter.prevent="handleEnter"
         ></textarea>
         <button
@@ -61,9 +74,9 @@
           :disabled="!message.trim() || isLoading || isUploading"
           @click="sendMessage"
         >
-          <span v-if="isLoading">Sending...</span>
+          <span v-if="isLoading">{{ isImageMode ? 'Generating...' : 'Sending...' }}</span>
           <span v-else-if="isUploading">Uploading...</span>
-          <span v-else>Send</span>
+          <span v-else>{{ isImageMode ? 'Generate' : 'Send' }}</span>
         </button>
       </div>
     </div>
@@ -96,6 +109,11 @@ export default {
     const uploadedFiles = ref([]);
     const uploadStatus = ref(null);
     const isUploading = ref(false);
+    const isImageMode = ref(false);
+
+    const toggleImageMode = () => {
+      isImageMode.value = !isImageMode.value;
+    };
 
     const handleEnter = (event) => {
       if (event.shiftKey) return;
@@ -148,8 +166,12 @@ export default {
     const sendMessage = async () => {
       if (!message.value.trim() || props.isLoading) return;
 
-      emit('send', message.value.trim());
+      const content = message.value.trim();
+      emit('send', { content, isImageGeneration: isImageMode.value });
       message.value = '';
+      if (isImageMode.value) {
+        isImageMode.value = false; // Turn off image mode after sending
+      }
       await nextTick();
       textarea.value?.focus();
     };
@@ -164,10 +186,12 @@ export default {
       uploadedFiles,
       uploadStatus,
       isUploading,
+      isImageMode,
       handleEnter,
       sendMessage,
       handleFileUpload,
-      removeFile
+      removeFile,
+      toggleImageMode
     };
   }
 };
@@ -246,14 +270,20 @@ export default {
   min-width: 120px;
 }
 
+.upload-button:hover:not(:disabled) {
+  border-color: #10a37f;
+  color: #10a37f;
+}
+
 .upload-button:disabled {
   background-color: #f5f5f5;
-  color: #999;
   cursor: not-allowed;
 }
 
-.uploaded-files {
-  margin-top: 4px;
+.upload-button.active {
+  background-color: #10a37f;
+  border-color: #10a37f;
+  color: white;
 }
 
 .file-tag {
@@ -264,11 +294,5 @@ export default {
   background-color: #f5f5f5;
   border-radius: 4px;
   font-size: 12px;
-}
-
-.file-tag button {
-  padding: 0 4px;
-  font-size: 16px;
-  line-height: 1;
 }
 </style>

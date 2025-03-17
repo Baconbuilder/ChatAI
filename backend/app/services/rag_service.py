@@ -6,11 +6,21 @@ from langchain.chains.combine_documents import create_stuff_documents_chain
 from langchain_community.document_loaders import PyPDFLoader, DirectoryLoader
 from langchain_chroma import Chroma
 from langchain_text_splitters import RecursiveCharacterTextSplitter
+from langchain.schema import BaseRetriever
+from pydantic import BaseModel, Field
 import re
 import os
 import traceback
 import glob
 import shutil
+from typing import List, Dict, Any, Optional
+import numpy as np
+from dataclasses import dataclass
+from datetime import datetime
+import base64
+from io import BytesIO
+from openai import OpenAI
+from dotenv import load_dotenv
 
 # Configuration - Exactly matching reference implementation
 MODEL_NAME = "llama3.2:latest"
@@ -21,12 +31,17 @@ CHUNK_OVERLAP = 50
 ZH_CHUNK_SIZE = 384
 ZH_CHUNK_OVERLAP = 75
 
+load_dotenv()
+
+openai_api_key = os.getenv('OPENAI_API_KEY')
+
 class RAGService:
     def __init__(self):
         self.vectorstores = {}  # Dictionary to store vectorstores by conversation_id
         self.chains = {}  # Dictionary to store chains by conversation_id
-        self.embeddings = OllamaEmbeddings(model=EMBEDDING_MODEL)
+        self.embeddings = OllamaEmbeddings(model=MODEL_NAME)
         self.base_vector_path = os.path.join(os.path.dirname(__file__), '..', '..', 'vector_db')
+        self.openai_client = OpenAI()
         
         # Create base vector store directory if it doesn't exist
         if not os.path.exists(self.base_vector_path):
@@ -304,12 +319,33 @@ class RAGService:
             print(traceback.format_exc())
             raise Exception(f"Failed to add documents: {str(e)}")
 
-    async def get_response(self, conversation_id: str, query: str, chat_history: list = None) -> str:
-        """Get response from the appropriate chain based on query language"""
+    async def generate_image(self, prompt: str) -> Optional[str]:
+        """Generate an image using DALL-E and return base64 encoded image"""
+        try:
+            response = self.openai_client.images.generate(
+                model="dall-e-3",
+                prompt=prompt,
+                size="1024x1024",
+                n=1,
+                response_format="b64_json"
+            )
+            return response.data[0].b64_json
+        except Exception as e:
+            error_msg = f"Error generating image: {str(e)}"
+            print(error_msg)
+            print(traceback.format_exc())
+            raise Exception(error_msg)
+
+    async def get_response(self, conversation_id: str, query: str, chat_history: list = None, is_image_generation: bool = False) -> str:
+        """Get response from the appropriate chain based on query language or generate image"""
         if chat_history is None:
             chat_history = []
         
         try:
+            if is_image_generation:
+                image_base64 = await self.generate_image(query)
+                return f"<image>{image_base64}</image>"
+            
             # Initialize RAG for this conversation if not already done
             if conversation_id not in self.chains:
                 self.setup_rag(conversation_id)

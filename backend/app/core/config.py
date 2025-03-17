@@ -17,6 +17,7 @@ class Settings(BaseSettings):
 
     # Database Settings
     DATABASE_URL: str
+    OPENAI_API_KEY: str
 
     class Config:
         case_sensitive = True

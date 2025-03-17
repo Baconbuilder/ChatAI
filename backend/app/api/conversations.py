@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from app.db.session import get_db
@@ -91,9 +91,10 @@ async def create_message(
     try:
         # Get response from RAG service
         response_content = await rag_service.get_response(
-            conversation_id=str(conversation_id),  # Convert to string since we're using it as a key
+            conversation_id=str(conversation_id),
             query=message.content,
-            chat_history=chat_history
+            chat_history=chat_history,
+            is_image_generation=message.is_image_generation if hasattr(message, 'is_image_generation') else False
         )
 
         # Create assistant message

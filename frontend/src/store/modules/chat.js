@@ -96,13 +96,12 @@ export default {
         throw error;
       }
     },
-    async sendMessage({ commit }, { conversationId, content }) {
+    async sendMessage({ commit }, { conversationId, content, isImageGeneration }) {
       try {
-        const message = await conversationService.sendMessage(conversationId, content);
-        commit('ADD_MESSAGE', { conversationId, message });
-        return message;
+        const response = await conversationService.sendMessage(conversationId, content, isImageGeneration);
+        return response;
       } catch (error) {
-        console.error('Error sending message:', error);
+        console.error('Error in sendMessage action:', error);
         throw error;
       }
     },

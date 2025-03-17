@@ -6,7 +6,7 @@ class MessageBase(BaseModel):
     content: str
 
 class MessageCreate(MessageBase):
-    pass
+    is_image_generation: bool = False
 
 class MessageResponse(MessageBase):
     id: int
