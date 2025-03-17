@@ -5,9 +5,8 @@
     'assistant': message.role === 'assistant',
     'error': message.type === 'error'
   }">
-    <div class="message-content">
-      {{ message.content }}
-    </div>
+    <div class="message-content" v-if="isImageContent" v-html="message.content"></div>
+    <div class="message-content" v-else>{{ message.content }}</div>
   </div>
 </template>
 
@@ -28,9 +27,14 @@ export default {
   },
   setup(props) {
     const isUser = computed(() => props.message.userId === props.currentUserId);
+    const isImageContent = computed(() => 
+      props.message.content.includes('<img') && 
+      props.message.content.includes('data:image/png;base64,')
+    );
 
     return {
-      isUser
+      isUser,
+      isImageContent
     };
   }
 };
@@ -89,6 +93,12 @@ export default {
   white-space: pre-wrap;
   word-break: break-word;
   line-height: 1.5;
+}
+
+.message-content :deep(img) {
+  max-width: 100%;
+  border-radius: 8px;
+  margin: 8px 0;
 }
 
 .message-content pre {
