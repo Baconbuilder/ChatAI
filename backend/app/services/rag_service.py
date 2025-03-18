@@ -53,9 +53,10 @@ SEARCH_OR_NOT_MSG = (
 )
 
 QUERY_MSG = (
-    'Create a simple search query to find the specific information needed. Use only keywords and dates. '
-    'No special operators or formatting. Example: "biden approval rating march 2024" or '
-    '"tesla stock price today". Keep it under 6 words when possible.'
+    'Create a simple search query to find the specific information needed. Use only essential keywords and dates. '
+    'No special operators or formatting. Focus on the core question without adding assumptions. '
+    'Examples: "us president 2024" or "tesla stock price today" or "weather new york". '
+    'Keep it under 5 words when possible. Do not include names of people unless specifically asked about them.'
 )
 
 CONTAINS_DATA_MSG = (
@@ -385,32 +386,38 @@ class RAGService:
         """Generate a search query based on user input"""
         try:
             llm = ChatOllama(
-                # temperature=0.1,
+                temperature=0.1,  # Explicitly set low temperature for more deterministic results
                 model=MODEL_NAME
             )
             
+            # Use the exact format from search_agent.py
             query_msg = f'CREATE A SEARCH QUERY FOR THIS PROMPT: \n{query}'
             
-            messages = [
+            # Format messages exactly like in search_agent.py
+            response = await llm.ainvoke([
                 {"role": "system", "content": QUERY_MSG},
                 {"role": "user", "content": query_msg}
-            ]
+            ])
             
-            response = await llm.ainvoke(messages)
-            
-            # Clean up the query string
+            # Clean up the query string according to search_agent.py pattern
             search_query = response.content.strip()
             # Remove quotes if they exist at the start and end
             search_query = search_query.strip('"\'')
             # Remove any newlines and extra spaces
             search_query = ' '.join(search_query.split())
             
+            # Apply additional filtering to remove unnecessary terms
+            words = search_query.split()
+            if len(words) > 6:  # Keep it concise as per the system message
+                search_query = ' '.join(words[:6])
+            
             logger.info(f"Generated search query: {search_query}")
             return search_query
         except Exception as e:
             logger.error(f"Error generating search query: {str(e)}")
-            # Fall back to the original query if there's an error
-            return query
+            # Fall back to a very simple query based on the original
+            simple_query = ' '.join(query.split()[:4])  # Just take first few words
+            return simple_query
 
     async def duckduckgo_search(self, query):
         """Search DuckDuckGo for the query"""
@@ -457,13 +464,14 @@ class RAGService:
         """Scrape content from a webpage with timeout"""
         logger.info(f"Attempting to scrape webpage: {url}")
         try:
+            logger.info("Downloading webpage content...")
             # Use a shorter timeout for download
             downloaded = trafilatura.fetch_url(url=url)
             if downloaded:
                 logger.info("Successfully downloaded webpage")
                 content = trafilatura.extract(downloaded, include_formatting=True, include_links=True)
                 if content:
-                    if len(content) > 8000:  # Shorter content limit
+                    if len(content) > 8000:  # Shorter content limit to avoid LLM context issues
                         content = content[:8000]
                         logger.info("Truncated content")
                     logger.info(f"Successfully extracted content (length: {len(content)} characters)")
@@ -492,14 +500,17 @@ class RAGService:
             
             needed_prompt = f'PAGE_TEXT: {search_content} \nUSER_PROMPT: {user_query} \nSEARCH_QUERY: {query}'
             
-            messages = [
+            response = await llm.ainvoke([
                 {"role": "system", "content": CONTAINS_DATA_MSG},
                 {"role": "user", "content": needed_prompt}
-            ]
+            ])
             
-            response = await llm.ainvoke(messages)
+            content = response.content.lower()
             
-            return 'true' in response.content.lower()
+            if 'true' in content:
+                return True
+            else:
+                return False
         except Exception as e:
             logger.error(f"Error checking if content contains data: {str(e)}")
             # Default to True if there's an error, to be more inclusive
@@ -508,6 +519,7 @@ class RAGService:
     async def web_search(self, query):
         """Perform web search and return relevant content"""
         try:
+            logger.info('GENERATING SEARCH QUERY.')
             # Generate search query
             search_query = await self.query_generator(query)
             if not search_query:
@@ -522,7 +534,7 @@ class RAGService:
                 
             contexts = []
             checked_urls = set()
-            max_sources = 2  # Reduced from 3 to 2 to improve response time
+            max_sources = 2  # Limit to 2 sources for faster response
             
             # Process results in order
             for result in search_results:
@@ -534,30 +546,28 @@ class RAGService:
                     continue
                     
                 checked_urls.add(url)
-                logger.info(f"Checking source {len(contexts) + 1} of {max_sources}: {url}")
+                logger.info(f"\nChecking source {len(contexts) + 1} of {max_sources}: {url}")
                 
                 page_text = await self.scrape_webpage(url)
                 if not page_text:
                     continue
-                
-                # Skip content relevance check to speed up processing
-                # Just add content directly if we can scrape it
-                logger.info("Source contains relevant information - adding to context")
-                contexts.append(f"Source: {url}\n\n{page_text}")
-                
-                # Break after getting the first good source to improve response time
-                if len(contexts) > 0:
-                    break
+                    
+                # Skip relevance check for the first source to ensure we get at least one result
+                if len(contexts) == 0 or await self.contains_data_needed(page_text, search_query, query):
+                    logger.info("Source contains relevant information - adding to context")
+                    contexts.append(f"Source: {url}\n\n{page_text}")
+                else:
+                    logger.info("Source does not contain relevant information - skipping")
             
             if contexts:
-                logger.info(f"Found {len(contexts)} relevant sources")
+                logger.info(f'\nFound {len(contexts)} relevant sources')
                 return '\n\n---\n\n'.join(contexts)
             else:
-                logger.info("No relevant sources found")
+                logger.info('\nNo relevant sources found')
                 return None
                 
         except Exception as e:
-            logger.error(f"Error in web_search: {str(e)}")
+            logger.error(f"Error in web_search: {type(e).__name__}: {str(e)}")
             return None
 
     async def generate_image(self, prompt: str) -> str:
