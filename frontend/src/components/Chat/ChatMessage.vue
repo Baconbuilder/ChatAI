@@ -5,10 +5,16 @@
     'assistant': message.role === 'assistant',
     'error': message.type === 'error'
   }">
-    <div class="message-content" v-if="isImageContent">
-      <img :src="fullImageUrl" alt="Generated image" class="generated-image" @click="handleImageClick" />
+    <div class="message-content">
+      <template v-if="isImageContent">
+        <div class="text-content">{{ textContent }}</div>
+        <img :src="fullImageUrl" alt="Generated image" class="generated-image" @click="handleImageClick" />
+        <div class="text-content">{{ followUpText }}</div>
+      </template>
+      <template v-else>
+        {{ message.content }}
+      </template>
     </div>
-    <div class="message-content" v-else>{{ message.content }}</div>
   </div>
 </template>
 
@@ -56,6 +62,22 @@ export default {
       return `${import.meta.env.VITE_API_URL.replace('/api', '')}${imageUrl.value}`;
     });
 
+    const textContent = computed(() => {
+      if (!isImageContent.value) return '';
+      const content = props.message.content;
+      // Extract text before the image tag
+      const beforeImg = content.split('<img')[0].trim();
+      return beforeImg;
+    });
+
+    const followUpText = computed(() => {
+      if (!isImageContent.value) return '';
+      const content = props.message.content;
+      // Extract text after the image tag, handling both self-closing and regular closing tags
+      const afterImg = content.split('/>')[1]?.trim() || '';
+      return afterImg;
+    });
+
     const handleImageClick = () => {
       if (fullImageUrl.value) {
         window.open(fullImageUrl.value, '_blank');
@@ -67,6 +89,8 @@ export default {
       isImageContent,
       imageUrl,
       fullImageUrl,
+      textContent,
+      followUpText,
       handleImageClick
     };
   }
@@ -126,6 +150,11 @@ export default {
   white-space: pre-wrap;
   word-break: break-word;
   line-height: 1.5;
+}
+
+.text-content {
+  margin: 0.5rem 0;
+  line-height: 1.6;
 }
 
 .generated-image {

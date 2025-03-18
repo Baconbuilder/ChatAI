@@ -205,7 +205,7 @@ class RAGService:
 
             # Create document chains with prompts
             en_prompt = ChatPromptTemplate.from_messages([
-                ("system", """You are a helpful and friendly AI assistant capable of both general conversation and document analysis.
+                ("system", """You are a helpful and friendly AI assistant capable of both general conversation, document analysis, and image generation.
 
                         Core principles:
                         1. Never make up information or statistics
@@ -230,6 +230,12 @@ class RAGService:
                            - Maintain a friendly, conversational tone
                            - Don't ask if the user wants to know about documents
                            - If mixing document and general knowledge, clearly distinguish between the two
+
+                        4. For image generation context:
+                           - Acknowledge when users are thanking you for generated images
+                           - Maintain awareness of image-related context in the conversation
+                           - Offer relevant follow-up suggestions about image adjustments or new generations
+                           - Don't deny or contradict previous image generation actions
                         
                         \n\n
                         {context}"""),
@@ -238,7 +244,7 @@ class RAGService:
             ])
             
             zh_prompt = ChatPromptTemplate.from_messages([
-                ("system", """你是一個專業且親切的AI助理，能夠進行一般對話並分析文件。
+                ("system", """你是一個專業且親切的AI助理，能夠進行一般對話、分析文件，以及生成圖片。
 
                         核心原則：
                         1. 絕不編造資訊或統計數據
@@ -264,6 +270,12 @@ class RAGService:
                            - 維持輕鬆的對話氛圍
                            - 除非用戶特別詢問，否則不要主動詢問是否要了解文件內容
                            - 如果同時使用文件內容和一般知識，請清楚區分來源
+
+                        4. 針對圖片生成相關對話：
+                           - 當用戶感謝你生成的圖片時，要適當回應
+                           - 保持對圖片相關上下文的認知
+                           - 提供相關的後續建議，如調整圖片或生成新的圖片
+                           - 不要否認或矛盾之前的圖片生成行為
                         
                         \n\n
                         {context}"""),
@@ -361,9 +373,19 @@ class RAGService:
             chat_history = []
         
         try:
+            print("\n=== Recent Chat History ===")
+            recent_history = chat_history[-3:] if len(chat_history) > 3 else chat_history
+            for msg in recent_history:
+                role = "User" if msg['role'] == 'user' else "Assistant"
+                print(f"{role}: {msg['content'][:100]}...")  # Truncate long messages for readability
+            print("========================\n")
             if is_image_generation:
                 image_url = await self.generate_image(query)
-                return f"<img src=\"{image_url}\" alt=\"Generated image\" class=\"generated-image\" />"
+                # Create a more natural response for image generation
+                response = f"""I've generated an image based on your prompt: "{query}"
+                <img src="{image_url}" alt="Generated image" class="generated-image" />
+                Feel free to let me know if you'd like any adjustments to the image or if you'd like to generate another one with different parameters!"""
+                return response
             
             # Initialize RAG for this conversation if not already done
             if conversation_id not in self.chains:
