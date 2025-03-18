@@ -2,8 +2,9 @@
 <template>
   <div class="chat-input-container">
     <div class="relative flex flex-col gap-2">
-      <!-- File upload, image generation, and web search section -->
-      <div class="flex items-center gap-4">
+      <!-- Button row container -->
+      <div class="button-container">
+        <!-- Hidden file input -->
         <input
           type="file"
           ref="fileInput"
@@ -13,46 +14,50 @@
           @change="handleFileUpload"
           multiple
         />
-        <button
-          type="button"
-          class="upload-button"
-          @click="$refs.fileInput.click()"
-          :disabled="isLoading || isUploading"
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
-          </svg>
-          Upload PDF
-        </button>
-
-        <button
-          type="button"
-          class="upload-button"
-          :class="{ 'active': isImageMode }"
-          @click="toggleImageMode"
-          :disabled="isLoading || isUploading"
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-          </svg>
-          {{ isImageMode ? 'Image Mode' : 'Generate Image' }}
-        </button>
         
-        <button
-          type="button"
-          class="upload-button"
-          :class="{ 'active': isWebSearchMode }"
-          @click="toggleWebSearchMode"
-          :disabled="isLoading || isUploading"
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-          </svg>
-          {{ isWebSearchMode ? 'Web Search Mode' : 'Web Search' }}
-        </button>
+        <!-- Button group -->
+        <div class="button-group">
+          <button
+            type="button"
+            class="upload-button"
+            @click="$refs.fileInput.click()"
+            :disabled="isLoading || isUploading"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+            </svg>
+            Upload PDF
+          </button>
+
+          <button
+            type="button"
+            class="upload-button"
+            :class="{ 'active': isImageMode }"
+            @click="toggleImageMode"
+            :disabled="isLoading || isUploading"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+            </svg>
+            {{ isImageMode ? 'Image Mode' : 'Generate Image' }}
+          </button>
+          
+          <button
+            type="button"
+            class="upload-button"
+            :class="{ 'active': isWebSearchMode }"
+            @click="toggleWebSearchMode"
+            :disabled="isLoading || isUploading"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
+            {{ isWebSearchMode ? 'Web Search Mode' : 'Web Search' }}
+          </button>
+        </div>
         
         <!-- Display uploaded files inline -->
-        <div v-if="uploadedFiles.length > 0" class="flex items-center gap-2">
+        <div v-if="uploadedFiles.length > 0" class="files-container">
           <div class="flex flex-wrap gap-2">
             <div
               v-for="file in uploadedFiles"
@@ -97,7 +102,7 @@
 </template>
 
 <script>
-import { ref, onMounted, nextTick } from 'vue';
+import { ref, onMounted, nextTick, watch } from 'vue';
 import { useStore } from 'vuex';
 import { uploadService } from '@/services/uploadService';
 
@@ -124,6 +129,14 @@ export default {
     const isUploading = ref(false);
     const isImageMode = ref(false);
     const isWebSearchMode = ref(false);
+
+    // Watch for conversationId changes to reset uploaded files
+    watch(() => props.conversationId, (newId, oldId) => {
+      if (newId !== oldId) {
+        // Clear uploaded files when switching conversations
+        uploadedFiles.value = [];
+      }
+    });
 
     const toggleImageMode = () => {
       isImageMode.value = !isImageMode.value;
@@ -262,6 +275,26 @@ export default {
   margin-top: auto;
 }
 
+.button-container {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.button-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: nowrap;
+}
+
+.files-container {
+  display: flex;
+  align-items: center;
+  overflow-x: auto;
+  margin-top: 4px;
+}
+
 .input-wrapper {
   display: flex;
   position: relative;
@@ -317,6 +350,7 @@ export default {
 .upload-button {
   display: flex;
   align-items: center;
+  justify-content: center;
   padding: 6px 10px;
   background-color: #f5f5f5;
   color: #333;
@@ -326,6 +360,8 @@ export default {
   font-weight: 500;
   cursor: pointer;
   transition: all 0.2s;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .upload-button:hover:not(:disabled) {

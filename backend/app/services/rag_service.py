@@ -34,6 +34,8 @@ logger = logging.getLogger(__name__)
 
 # Configuration - Exactly matching reference implementation
 MODEL_NAME = "llama3.2:latest"
+# MODEL_NAME = "gemma3:4b"
+# MODEL_NAME = "qwen2.5:3b"
 TEMPERATURE = 0.5
 EMBEDDING_MODEL = "snowflake-arctic-embed2"
 CHUNK_SIZE = 512
