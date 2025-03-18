@@ -94,7 +94,8 @@ async def create_message(
             conversation_id=str(conversation_id),
             query=message.content,
             chat_history=chat_history,
-            is_image_generation=message.is_image_generation if hasattr(message, 'is_image_generation') else False
+            is_image_generation=message.is_image_generation if hasattr(message, 'is_image_generation') else False,
+            is_web_search=message.is_web_search if hasattr(message, 'is_web_search') else False
         )
 
         # Create assistant message

@@ -2,7 +2,7 @@
 <template>
   <div class="chat-input-container">
     <div class="relative flex flex-col gap-2">
-      <!-- File upload and image generation section -->
+      <!-- File upload, image generation, and web search section -->
       <div class="flex items-center gap-4">
         <input
           type="file"
@@ -35,7 +35,20 @@
           <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
           </svg>
-          {{ isImageMode ? 'Image Mode' : 'Chat Mode' }}
+          {{ isImageMode ? 'Image Mode' : 'Generate Image' }}
+        </button>
+        
+        <button
+          type="button"
+          class="upload-button"
+          :class="{ 'active': isWebSearchMode }"
+          @click="toggleWebSearchMode"
+          :disabled="isLoading || isUploading"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+          </svg>
+          {{ isWebSearchMode ? 'Web Search Mode' : 'Web Search' }}
         </button>
         
         <!-- Display uploaded files inline -->
@@ -65,7 +78,7 @@
           v-model="message"
           rows="3"
           class="message-input"
-          :placeholder="isImageMode ? 'Describe the image you want to generate...' : 'Type your message...'"
+          :placeholder="getInputPlaceholder()"
           @keydown.enter.prevent="handleEnter"
         ></textarea>
         <button
@@ -74,9 +87,9 @@
           :disabled="!message.trim() || isLoading || isUploading"
           @click="sendMessage"
         >
-          <span v-if="isLoading">{{ isImageMode ? 'Generating...' : 'Sending...' }}</span>
+          <span v-if="isLoading">{{ getButtonText(true) }}</span>
           <span v-else-if="isUploading">Uploading...</span>
-          <span v-else>{{ isImageMode ? 'Generate' : 'Send' }}</span>
+          <span v-else>{{ getButtonText(false) }}</span>
         </button>
       </div>
     </div>
@@ -110,9 +123,42 @@ export default {
     const uploadStatus = ref(null);
     const isUploading = ref(false);
     const isImageMode = ref(false);
+    const isWebSearchMode = ref(false);
 
     const toggleImageMode = () => {
       isImageMode.value = !isImageMode.value;
+      if (isImageMode.value && isWebSearchMode.value) {
+        isWebSearchMode.value = false;
+      }
+    };
+
+    const toggleWebSearchMode = () => {
+      isWebSearchMode.value = !isWebSearchMode.value;
+      if (isWebSearchMode.value && isImageMode.value) {
+        isImageMode.value = false;
+      }
+    };
+
+    const getInputPlaceholder = () => {
+      if (isImageMode.value) {
+        return 'Describe the image you want to generate...';
+      } else if (isWebSearchMode.value) {
+        return 'Ask a question that requires up-to-date information...';
+      } else {
+        return 'Type your message...';
+      }
+    };
+
+    const getButtonText = (isLoadingState) => {
+      if (isLoadingState) {
+        if (isImageMode.value) return 'Generating...';
+        if (isWebSearchMode.value) return 'Searching...';
+        return 'Sending...';
+      } else {
+        if (isImageMode.value) return 'Generate';
+        if (isWebSearchMode.value) return 'Search';
+        return 'Send';
+      }
     };
 
     const handleEnter = (event) => {
@@ -167,10 +213,17 @@ export default {
       if (!message.value.trim() || props.isLoading) return;
 
       const content = message.value.trim();
-      emit('send', { content, isImageGeneration: isImageMode.value });
+      emit('send', { 
+        content, 
+        isImageGeneration: isImageMode.value,
+        isWebSearch: isWebSearchMode.value 
+      });
       message.value = '';
       if (isImageMode.value) {
         isImageMode.value = false; // Turn off image mode after sending
+      }
+      if (isWebSearchMode.value) {
+        isWebSearchMode.value = false; // Turn off web search mode after sending
       }
       await nextTick();
       textarea.value?.focus();
@@ -187,11 +240,15 @@ export default {
       uploadStatus,
       isUploading,
       isImageMode,
+      isWebSearchMode,
       handleEnter,
       sendMessage,
       handleFileUpload,
       removeFile,
-      toggleImageMode
+      toggleImageMode,
+      toggleWebSearchMode,
+      getInputPlaceholder,
+      getButtonText
     };
   }
 };
@@ -248,51 +305,63 @@ export default {
 }
 
 .send-button:hover:not(:disabled) {
-  background-color: #0d8a6c;
+  background-color: #0d8c6c;
 }
 
 .send-button:disabled {
   background-color: #e5e5e5;
+  color: #a8a8a8;
   cursor: not-allowed;
 }
 
 .upload-button {
-  display: inline-flex;
+  display: flex;
   align-items: center;
-  padding: 6px 12px;
-  background-color: white;
+  padding: 6px 10px;
+  background-color: #f5f5f5;
+  color: #333;
   border: 1px solid #e5e5e5;
   border-radius: 6px;
   font-size: 14px;
   font-weight: 500;
-  color: #666;
+  cursor: pointer;
   transition: all 0.2s;
-  min-width: 120px;
 }
 
 .upload-button:hover:not(:disabled) {
-  border-color: #10a37f;
-  color: #10a37f;
+  background-color: #e5e5e5;
 }
 
 .upload-button:disabled {
-  background-color: #f5f5f5;
+  background-color: #f9f9f9;
+  color: #c5c5c5;
   cursor: not-allowed;
 }
 
 .upload-button.active {
   background-color: #10a37f;
-  border-color: #10a37f;
   color: white;
+  border-color: #10a37f;
 }
 
 .file-tag {
-  display: inline-flex;
+  display: flex;
   align-items: center;
-  gap: 4px;
-  padding: 2px 8px;
-  background-color: #f5f5f5;
+  padding: 4px 8px;
+  background-color: #e5f7f2;
+  border: 1px solid #c5eae0;
   border-radius: 4px;
   font-size: 12px;
+  color: #0d8c6c;
+}
+
+.file-tag button {
+  margin-left: 4px;
+  padding: 0 4px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
 }
 </style>

@@ -69,7 +69,7 @@
       const currentUserId = computed(() => String(store.state.auth.user?.id));
       const currentConversation = computed(() => store.state.chat.currentConversation);
 
-      const handleSendMessage = async ({ content, isImageGeneration }) => {
+      const handleSendMessage = async ({ content, isImageGeneration, isWebSearch }) => {
         if (!content.trim() || isLoading.value) return;
         
         let temporaryMessageId = null;
@@ -103,7 +103,8 @@
           const response = await store.dispatch('chat/sendMessage', {
             conversationId: currentConversation.value.id,
             content: content,
-            isImageGeneration: isImageGeneration
+            isImageGeneration: isImageGeneration,
+            isWebSearch: isWebSearch
           });
 
           // Update conversation title if it's the first message

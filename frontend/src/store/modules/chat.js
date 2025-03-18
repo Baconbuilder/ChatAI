@@ -96,9 +96,9 @@ export default {
         throw error;
       }
     },
-    async sendMessage({ commit }, { conversationId, content, isImageGeneration }) {
+    async sendMessage({ commit }, { conversationId, content, isImageGeneration, isWebSearch }) {
       try {
-        const response = await conversationService.sendMessage(conversationId, content, isImageGeneration);
+        const response = await conversationService.sendMessage(conversationId, content, isImageGeneration, isWebSearch);
         return response;
       } catch (error) {
         console.error('Error in sendMessage action:', error);

@@ -23,6 +23,14 @@ from openai import OpenAI
 from dotenv import load_dotenv
 import uuid
 import openai
+import requests
+from bs4 import BeautifulSoup
+import trafilatura
+import logging
+
+# Setup logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 # Configuration - Exactly matching reference implementation
 MODEL_NAME = "llama3.2:latest"
@@ -36,6 +44,30 @@ ZH_CHUNK_OVERLAP = 75
 load_dotenv()
 
 openai_api_key = os.getenv('OPENAI_API_KEY')
+
+# System messages for web search
+SEARCH_OR_NOT_MSG = (
+    'Return True if the user is asking about current events, news, or facts that require up-to-date '
+    'information. Return False if the question can be answered without searching. Respond only with '
+    '"True" or "False".'
+)
+
+QUERY_MSG = (
+    'Create a simple search query to find the specific information needed. Use only keywords and dates. '
+    'No special operators or formatting. Example: "biden approval rating march 2024" or '
+    '"tesla stock price today". Keep it under 6 words when possible.'
+)
+
+CONTAINS_DATA_MSG = (
+    'Check if this webpage contains information that could help answer the user\'s question. '
+    'Return True if the page contains:\n'
+    '1. Direct answers to the question\n'
+    '2. Recent information about the topic\n'
+    '3. Background context that helps understand the answer\n'
+    '4. Related facts or figures that could be relevant\n'
+    'Only return False if the page is completely unrelated or contains no useful information. '
+    'Respond only with "True" or "False" - no other text.'
+)
 
 class RAGService:
     def __init__(self):
@@ -205,7 +237,7 @@ class RAGService:
 
             # Create document chains with prompts
             en_prompt = ChatPromptTemplate.from_messages([
-                ("system", """You are a helpful and friendly AI assistant capable of both general conversation, document analysis, and image generation.
+                ("system", """You are a helpful and friendly AI assistant capable of both general conversation and document analysis.
 
                         Core principles:
                         1. Never make up information or statistics
@@ -236,6 +268,13 @@ class RAGService:
                            - Maintain awareness of image-related context in the conversation
                            - Offer relevant follow-up suggestions about image adjustments or new generations
                            - Don't deny or contradict previous image generation actions
+
+                        5. For web search context:
+                           - When responding based on web search results, synthesize the information clearly
+                           - Cite sources when appropriate by mentioning the website or publication
+                           - Acknowledge the recency of information when responding to questions about current events
+                           - Don't deny or contradict the fact that web search was used to find information
+                           - Maintain awareness of web search context in the conversation
                         
                         \n\n
                         {context}"""),
@@ -244,7 +283,7 @@ class RAGService:
             ])
             
             zh_prompt = ChatPromptTemplate.from_messages([
-                ("system", """你是一個專業且親切的AI助理，能夠進行一般對話、分析文件，以及生成圖片。
+                ("system", """你是一個專業且親切的AI助理，能夠進行一般對話並分析文件。
 
                         核心原則：
                         1. 絕不編造資訊或統計數據
@@ -276,6 +315,13 @@ class RAGService:
                            - 保持對圖片相關上下文的認知
                            - 提供相關的後續建議，如調整圖片或生成新的圖片
                            - 不要否認或矛盾之前的圖片生成行為
+
+                        5. 針對網絡搜索相關對話：
+                           - 當回應基於網絡搜索結果時，要清晰地綜合信息
+                           - 在適當的時候引用來源，例如提及網站或出版物
+                           - 在回答關於時事的問題時，確認信息的時效性
+                           - 不要否認或矛盾網絡搜索被用來查找信息的事實
+                           - 保持對網絡搜索上下文的認知
                         
                         \n\n
                         {context}"""),
@@ -335,14 +381,194 @@ class RAGService:
             print(traceback.format_exc())
             raise Exception(f"Failed to add documents: {str(e)}")
 
+    async def query_generator(self, query):
+        """Generate a search query based on user input"""
+        try:
+            llm = ChatOllama(
+                # temperature=0.1,
+                model=MODEL_NAME
+            )
+            
+            query_msg = f'CREATE A SEARCH QUERY FOR THIS PROMPT: \n{query}'
+            
+            messages = [
+                {"role": "system", "content": QUERY_MSG},
+                {"role": "user", "content": query_msg}
+            ]
+            
+            response = await llm.ainvoke(messages)
+            
+            # Clean up the query string
+            search_query = response.content.strip()
+            # Remove quotes if they exist at the start and end
+            search_query = search_query.strip('"\'')
+            # Remove any newlines and extra spaces
+            search_query = ' '.join(search_query.split())
+            
+            logger.info(f"Generated search query: {search_query}")
+            return search_query
+        except Exception as e:
+            logger.error(f"Error generating search query: {str(e)}")
+            # Fall back to the original query if there's an error
+            return query
+
+    async def duckduckgo_search(self, query):
+        """Search DuckDuckGo for the query"""
+        logger.info(f"Searching DuckDuckGo for: {query}")
+        try:
+            headers = {
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.36"
+            }
+            url = f'https://html.duckduckgo.com/html/?q={query}'
+            
+            # Use a timeout to avoid hanging
+            response = requests.get(url, headers=headers, timeout=10)
+            response.raise_for_status()
+            
+            soup = BeautifulSoup(response.text, 'html.parser')
+            results = []
+
+            for i, result in enumerate(soup.find_all('div', class_='result'), start=1):
+                if i > 5:  # Limit to top 5 results
+                    break
+
+                title_tag = result.find('a', class_='result__a')
+                if not title_tag:
+                    continue
+
+                link = title_tag['href']
+                snippet_tag = result.find('a', class_='result__snippet')
+                snippet = snippet_tag.text.strip() if snippet_tag else 'No description available'
+
+                results.append({
+                    'id': i,
+                    'link': link,
+                    'search_description': snippet
+                })
+                logger.info(f"Found result #{i}: {link[:100]}...")
+
+            logger.info(f"Total results found: {len(results)}")
+            return results
+        except Exception as e:
+            logger.error(f"Error searching DuckDuckGo: {str(e)}")
+            return []
+
+    async def scrape_webpage(self, url):
+        """Scrape content from a webpage with timeout"""
+        logger.info(f"Attempting to scrape webpage: {url}")
+        try:
+            # Use a shorter timeout for download
+            downloaded = trafilatura.fetch_url(url=url)
+            if downloaded:
+                logger.info("Successfully downloaded webpage")
+                content = trafilatura.extract(downloaded, include_formatting=True, include_links=True)
+                if content:
+                    if len(content) > 8000:  # Shorter content limit
+                        content = content[:8000]
+                        logger.info("Truncated content")
+                    logger.info(f"Successfully extracted content (length: {len(content)} characters)")
+                    return content
+                else:
+                    logger.info("Failed to extract content from webpage")
+                    return None
+            else:
+                logger.info("Failed to download webpage")
+                return None
+        except Exception as e:
+            logger.error(f"Error scraping webpage: {str(e)}")
+            return None
+
+    async def contains_data_needed(self, search_content, query, user_query):
+        """Check if the search content contains relevant data for the query"""
+        try:
+            llm = ChatOllama(
+                temperature=0.1,
+                model=MODEL_NAME
+            )
+            
+            # Truncate content to ensure LLM can process it
+            if len(search_content) > 5000:
+                search_content = search_content[:5000] + "..."
+            
+            needed_prompt = f'PAGE_TEXT: {search_content} \nUSER_PROMPT: {user_query} \nSEARCH_QUERY: {query}'
+            
+            messages = [
+                {"role": "system", "content": CONTAINS_DATA_MSG},
+                {"role": "user", "content": needed_prompt}
+            ]
+            
+            response = await llm.ainvoke(messages)
+            
+            return 'true' in response.content.lower()
+        except Exception as e:
+            logger.error(f"Error checking if content contains data: {str(e)}")
+            # Default to True if there's an error, to be more inclusive
+            return True
+
+    async def web_search(self, query):
+        """Perform web search and return relevant content"""
+        try:
+            # Generate search query
+            search_query = await self.query_generator(query)
+            if not search_query:
+                logger.warning("Failed to generate search query")
+                return None
+                
+            # Search DuckDuckGo
+            search_results = await self.duckduckgo_search(search_query)
+            if not search_results:
+                logger.warning("No search results found")
+                return None
+                
+            contexts = []
+            checked_urls = set()
+            max_sources = 2  # Reduced from 3 to 2 to improve response time
+            
+            # Process results in order
+            for result in search_results:
+                if len(contexts) >= max_sources:
+                    break
+                    
+                url = result['link']
+                if url in checked_urls:
+                    continue
+                    
+                checked_urls.add(url)
+                logger.info(f"Checking source {len(contexts) + 1} of {max_sources}: {url}")
+                
+                page_text = await self.scrape_webpage(url)
+                if not page_text:
+                    continue
+                
+                # Skip content relevance check to speed up processing
+                # Just add content directly if we can scrape it
+                logger.info("Source contains relevant information - adding to context")
+                contexts.append(f"Source: {url}\n\n{page_text}")
+                
+                # Break after getting the first good source to improve response time
+                if len(contexts) > 0:
+                    break
+            
+            if contexts:
+                logger.info(f"Found {len(contexts)} relevant sources")
+                return '\n\n---\n\n'.join(contexts)
+            else:
+                logger.info("No relevant sources found")
+                return None
+                
+        except Exception as e:
+            logger.error(f"Error in web_search: {str(e)}")
+            return None
+
     async def generate_image(self, prompt: str) -> str:
         """Generate an image using DALL-E"""
         try:
             # Generate image using DALL-E
-            response = self.openai_client.images.generate(
-                model="dall-e-2",
+            response = await openai.images.generate(
+                model="dall-e-3",
                 prompt=prompt,
-                size="256x256",
+                size="1024x1024",
+                quality="standard",
                 n=1,
                 response_format="b64_json"
             )
@@ -362,28 +588,24 @@ class RAGService:
             return f"/static/images/{filename}"
             
         except Exception as e:
-            error_msg = f"Error generating image: {str(e)}"
-            print(error_msg)
-            print(traceback.format_exc())
-            raise 
+            logger.error(f"Error generating image: {str(e)}")
+            logger.error(traceback.format_exc())
+            raise
 
-    async def get_response(self, conversation_id: str, query: str, chat_history: list = None, is_image_generation: bool = False) -> str:
+    async def get_response(self, conversation_id: str, query: str, chat_history: list = None, is_image_generation: bool = False, is_web_search: bool = False) -> str:
         """Get response from the appropriate chain based on query language or generate image"""
         if chat_history is None:
             chat_history = []
         
         try:
-            print("\n=== Recent Chat History ===")
-            recent_history = chat_history[-3:] if len(chat_history) > 3 else chat_history
-            for msg in recent_history:
-                role = "User" if msg['role'] == 'user' else "Assistant"
-                print(f"{role}: {msg['content'][:100]}...")  # Truncate long messages for readability
-            print("========================\n")
+            # Handle image generation
             if is_image_generation:
                 image_url = await self.generate_image(query)
                 # Create a more natural response for image generation
                 response = f"""I've generated an image based on your prompt: "{query}"
+
                 <img src="{image_url}" alt="Generated image" class="generated-image" />
+
                 Feel free to let me know if you'd like any adjustments to the image or if you'd like to generate another one with different parameters!"""
                 return response
             
@@ -403,6 +625,55 @@ class RAGService:
             lang = self.detect_language(query)
             chain = self.chains[conversation_id]["zh" if lang == "zh" else "en"]
             
+            # Handle web search
+            if is_web_search:
+                # Perform web search with timeout
+                search_results = await self.web_search(query)
+                
+                if search_results:
+                    # Extract source URLs for citation
+                    sources = []
+                    for result in search_results.split("Source: "):
+                        if result.strip():
+                            url_end = result.find("\n")
+                            if url_end > 0:
+                                url = result[:url_end].strip()
+                                if url and url not in sources and url.startswith("http"):
+                                    sources.append(url)
+                    
+                    # Add search results to the prompt
+                    prompt = f"""WEB SEARCH RESULTS:
+{search_results}
+
+USER QUERY: {query}
+
+Based on the web search results above, provide a comprehensive, accurate answer to the user's query.
+Include only information found in the search results.
+If the information is not in the search results, say you don't have enough information.
+Citations should be in [1], [2], etc. format at the end of relevant sentences.
+"""
+                    
+                    # Get response using the chain
+                    result = await chain.ainvoke({
+                        "input": prompt,
+                        "chat_history": formatted_history
+                    })
+                    
+                    # Get the response
+                    response = result["answer"] if isinstance(result, dict) else str(result)
+                    
+                    # Format citations at the end
+                    if sources:
+                        response += "\n\nSources:\n"
+                        for i, source in enumerate(sources, 1):
+                            response += f"[{i}] {source}\n"
+                else:
+                    # No search results found
+                    response = f"I tried searching the web for information about '{query}', but couldn't find relevant results. Would you like me to try a different search query, or can I help you with something else?"
+                
+                return response
+            
+            # Regular RAG response
             # Get response using the chain
             result = await chain.ainvoke({
                 "input": query,
@@ -415,8 +686,8 @@ class RAGService:
             return response
         except Exception as e:
             error_msg = f"Error in get_response for conversation {conversation_id}: {str(e)}"
-            print(error_msg)
-            print(traceback.format_exc())
+            logger.error(error_msg)
+            logger.error(traceback.format_exc())
             raise Exception(error_msg)
 
 # Initialize global RAG service

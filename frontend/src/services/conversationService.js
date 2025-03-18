@@ -50,11 +50,12 @@ export const conversationService = {
     }
   },
 
-  async sendMessage(conversationId, content, isImageGeneration = false) {
+  async sendMessage(conversationId, content, isImageGeneration = false, isWebSearch = false) {
     try {
       const response = await api.post(`/conversations/${conversationId}/messages`, {
         content,
-        is_image_generation: isImageGeneration
+        is_image_generation: isImageGeneration,
+        is_web_search: isWebSearch
       });
       
       if (!response.data) {

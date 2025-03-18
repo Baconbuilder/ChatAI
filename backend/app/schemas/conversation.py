@@ -7,6 +7,7 @@ class MessageBase(BaseModel):
 
 class MessageCreate(MessageBase):
     is_image_generation: bool = False
+    is_web_search: bool = False
 
 class MessageResponse(MessageBase):
     id: int
