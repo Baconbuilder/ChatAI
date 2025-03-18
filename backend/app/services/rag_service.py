@@ -534,7 +534,7 @@ class RAGService:
                 
             contexts = []
             checked_urls = set()
-            max_sources = 2  # Limit to 2 sources for faster response
+            max_sources = 3  # Limit to 2 sources for faster response
             
             # Process results in order
             for result in search_results:
