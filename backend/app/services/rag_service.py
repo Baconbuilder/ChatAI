@@ -33,10 +33,15 @@ MODEL_NAME = "llama3.2:latest"
 # MODEL_NAME = "qwen2.5:3b"
 TEMPERATURE = 0.5
 EMBEDDING_MODEL = "snowflake-arctic-embed2"
+# EMBEDDING_MODEL = "bge-m3:latest"
 CHUNK_SIZE = 512
 CHUNK_OVERLAP = 50
-ZH_CHUNK_SIZE = 384
-ZH_CHUNK_OVERLAP = 75
+CHUNK_SIZE_L = 1024
+CHUNK_OVERLAP_L = 100
+ZH_CHUNK_SIZE_L = 384
+ZH_CHUNK_OVERLAP_L = 75
+ZH_CHUNK_SIZE = 200
+ZH_CHUNK_OVERLAP = 30
 
 load_dotenv()
 
@@ -129,17 +134,31 @@ class RAGService:
             print(f"Documents by language - EN: {len(en_docs)}, ZH: {len(zh_docs)}, Other: {len(other_docs)}")
             
             # Configure language-specific splitters
-            en_splitter = RecursiveCharacterTextSplitter(
-                chunk_size=CHUNK_SIZE,
-                chunk_overlap=CHUNK_OVERLAP,
-                separators=["\n\n", "\n", ". ", " ", ""]
-            )
+            if (len(en_docs) > 10):
+                en_splitter = RecursiveCharacterTextSplitter(
+                    chunk_size=CHUNK_SIZE_L,
+                    chunk_overlap=CHUNK_OVERLAP_L,
+                    separators=["\n\n", "\n", ". ", " ", ""]
+                )
+            else:
+                en_splitter = RecursiveCharacterTextSplitter(
+                    chunk_size=CHUNK_SIZE,
+                    chunk_overlap=CHUNK_OVERLAP,
+                    separators=["\n\n", "\n", ". ", " ", ""]
+                )
             
-            zh_splitter = RecursiveCharacterTextSplitter(
-                chunk_size=ZH_CHUNK_SIZE,
-                chunk_overlap=ZH_CHUNK_OVERLAP,
-                separators=["\n\n", "\n", "。", "，", "、", " ", ""]
-            )
+            if (len(zh_docs) > 10):
+                zh_splitter = RecursiveCharacterTextSplitter(
+                    chunk_size=ZH_CHUNK_SIZE_L,
+                    chunk_overlap=ZH_CHUNK_OVERLAP_L,
+                    separators=["\n\n", "\n", "。", "，", "、", " ", ""]
+                )
+            else:   
+                zh_splitter = RecursiveCharacterTextSplitter(
+                    chunk_size=ZH_CHUNK_SIZE,
+                    chunk_overlap=ZH_CHUNK_OVERLAP,
+                    separators=["\n\n", "\n", "。", "，", "、", " ", ""]
+                )
             
             result_docs = []
             if en_docs:
@@ -181,7 +200,7 @@ class RAGService:
             )
             
             # Setup retriever
-            retriever = self.vectorstores[conversation_id].as_retriever(search_kwargs={"k": 4})
+            retriever = self.vectorstores[conversation_id].as_retriever(search_kwargs={"k": 5})
             
             # Setup question condenser
             condense_question_system_template = (
