@@ -15,12 +15,11 @@
         No conversations yet
       </div>
       <ConversationItem
-        v-for="conversation in conversations"
+        v-for="conversation in sortedConversations"
         :key="conversation.id"
         :conversation="conversation"
         :is-active="currentConversationId === conversation.id"
         @select="selectConversation"
-        @rename="startRename"
         @delete="deleteConversation"
       />
     </div>
@@ -45,6 +44,17 @@ export default {
     const currentConversationId = ref(null);
 
     const conversations = computed(() => store.state.chat.conversations);
+    
+    // Sort conversations by updated_at timestamp, most recent first
+    const sortedConversations = computed(() => {
+      return [...conversations.value].sort((a, b) => {
+        // Parse dates or use existing Date objects
+        const dateA = a.updated_at ? new Date(a.updated_at) : new Date(0);
+        const dateB = b.updated_at ? new Date(b.updated_at) : new Date(0);
+        // Sort descending (newest first)
+        return dateB - dateA;
+      });
+    });
 
     const loadConversations = async () => {
       try {
@@ -85,6 +95,7 @@ export default {
 
     return {
       conversations,
+      sortedConversations,
       currentConversationId,
       createNewChat,
       selectConversation,

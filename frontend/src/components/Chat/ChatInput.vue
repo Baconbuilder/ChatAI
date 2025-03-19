@@ -114,8 +114,8 @@ export default {
       default: false
     },
     conversationId: {
-      type: [String, Number],
-      required: true,
+      type: [String, Number, null],
+      required: false,
       default: null
     }
   },
@@ -187,8 +187,17 @@ export default {
         // If no conversation exists, create one first
         let currentConversationId = props.conversationId;
         if (!currentConversationId) {
-          const newConversation = await store.dispatch('chat/createConversation', 'New Chat');
-          currentConversationId = newConversation.id;
+          try {
+            const newConversation = await store.dispatch('chat/createConversation', 'New Chat');
+            currentConversationId = newConversation.id;
+            // Wait for state update
+            await nextTick();
+          } catch (error) {
+            console.error('Error creating conversation:', error);
+            uploadStatus.value = { type: 'error', message: 'Could not create conversation. Please try again.' };
+            isUploading.value = false;
+            return;
+          }
         }
 
         isUploading.value = true;

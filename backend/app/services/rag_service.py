@@ -26,11 +26,6 @@ import openai
 import requests
 from bs4 import BeautifulSoup
 import trafilatura
-import logging
-
-# Setup logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
 
 # Configuration - Exactly matching reference implementation
 MODEL_NAME = "llama3.2:latest"
@@ -413,17 +408,17 @@ class RAGService:
             if len(words) > 6:  # Keep it concise as per the system message
                 search_query = ' '.join(words[:6])
             
-            logger.info(f"Generated search query: {search_query}")
+            print(f"Generated search query: {search_query}")
             return search_query
         except Exception as e:
-            logger.error(f"Error generating search query: {str(e)}")
+            print(f"Error generating search query: {str(e)}")
             # Fall back to a very simple query based on the original
             simple_query = ' '.join(query.split()[:4])  # Just take first few words
             return simple_query
 
     async def duckduckgo_search(self, query):
         """Search DuckDuckGo for the query"""
-        logger.info(f"Searching DuckDuckGo for: {query}")
+        print(f"Searching DuckDuckGo for: {query}")
         try:
             headers = {
                 "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.36"
@@ -454,38 +449,38 @@ class RAGService:
                     'link': link,
                     'search_description': snippet
                 })
-                logger.info(f"Found result #{i}: {link[:100]}...")
+                print(f"Found result #{i}: {link[:100]}...")
 
-            logger.info(f"Total results found: {len(results)}")
+            print(f"Total results found: {len(results)}")
             return results
         except Exception as e:
-            logger.error(f"Error searching DuckDuckGo: {str(e)}")
+            print(f"Error searching DuckDuckGo: {str(e)}")
             return []
 
     async def scrape_webpage(self, url):
         """Scrape content from a webpage with timeout"""
-        logger.info(f"Attempting to scrape webpage: {url}")
+        print(f"Attempting to scrape webpage: {url}")
         try:
-            logger.info("Downloading webpage content...")
+            print("Downloading webpage content...")
             # Use a shorter timeout for download
             downloaded = trafilatura.fetch_url(url=url)
             if downloaded:
-                logger.info("Successfully downloaded webpage")
+                print("Successfully downloaded webpage")
                 content = trafilatura.extract(downloaded, include_formatting=True, include_links=True)
                 if content:
                     if len(content) > 8000:  # Shorter content limit to avoid LLM context issues
                         content = content[:8000]
-                        logger.info("Truncated content")
-                    logger.info(f"Successfully extracted content (length: {len(content)} characters)")
+                        print("Truncated content")
+                    print(f"Successfully extracted content (length: {len(content)} characters)")
                     return content
                 else:
-                    logger.info("Failed to extract content from webpage")
+                    print("Failed to extract content from webpage")
                     return None
             else:
-                logger.info("Failed to download webpage")
+                print("Failed to download webpage")
                 return None
         except Exception as e:
-            logger.error(f"Error scraping webpage: {str(e)}")
+            print(f"Error scraping webpage: {str(e)}")
             return None
 
     async def contains_data_needed(self, search_content, query, user_query):
@@ -514,24 +509,24 @@ class RAGService:
             else:
                 return False
         except Exception as e:
-            logger.error(f"Error checking if content contains data: {str(e)}")
+            print(f"Error checking if content contains data: {str(e)}")
             # Default to True if there's an error, to be more inclusive
             return True
 
     async def web_search(self, query):
         """Perform web search and return relevant content"""
         try:
-            logger.info('GENERATING SEARCH QUERY.')
+            print('GENERATING SEARCH QUERY.')
             # Generate search query
             search_query = await self.query_generator(query)
             if not search_query:
-                logger.warning("Failed to generate search query")
+                print("Failed to generate search query")
                 return None
                 
             # Search DuckDuckGo
             search_results = await self.duckduckgo_search(search_query)
             if not search_results:
-                logger.warning("No search results found")
+                print("No search results found")
                 return None
                 
             contexts = []
@@ -548,7 +543,7 @@ class RAGService:
                     continue
                     
                 checked_urls.add(url)
-                logger.info(f"\nChecking source {len(contexts) + 1} of {max_sources}: {url}")
+                print(f"\nChecking source {len(contexts) + 1} of {max_sources}: {url}")
                 
                 page_text = await self.scrape_webpage(url)
                 if not page_text:
@@ -556,31 +551,30 @@ class RAGService:
                     
                 # Skip relevance check for the first source to ensure we get at least one result
                 if len(contexts) == 0 or await self.contains_data_needed(page_text, search_query, query):
-                    logger.info("Source contains relevant information - adding to context")
+                    print("Source contains relevant information - adding to context")
                     contexts.append(f"Source: {url}\n\n{page_text}")
                 else:
-                    logger.info("Source does not contain relevant information - skipping")
+                    print("Source does not contain relevant information - skipping")
             
             if contexts:
-                logger.info(f'\nFound {len(contexts)} relevant sources')
+                print(f'\nFound {len(contexts)} relevant sources')
                 return '\n\n---\n\n'.join(contexts)
             else:
-                logger.info('\nNo relevant sources found')
+                print('\nNo relevant sources found')
                 return None
                 
         except Exception as e:
-            logger.error(f"Error in web_search: {type(e).__name__}: {str(e)}")
+            print(f"Error in web_search: {type(e).__name__}: {str(e)}")
             return None
 
     async def generate_image(self, prompt: str) -> str:
         """Generate an image using DALL-E"""
         try:
             # Generate image using DALL-E
-            response = await openai.images.generate(
-                model="dall-e-3",
+            response = self.openai_client.images.generate(
+                model="dall-e-2",
                 prompt=prompt,
-                size="1024x1024",
-                quality="standard",
+                size="256x256",
                 n=1,
                 response_format="b64_json"
             )
@@ -600,8 +594,8 @@ class RAGService:
             return f"/static/images/{filename}"
             
         except Exception as e:
-            logger.error(f"Error generating image: {str(e)}")
-            logger.error(traceback.format_exc())
+            print(f"Error generating image: {str(e)}")
+            print(traceback.format_exc())
             raise
 
     async def get_response(self, conversation_id: str, query: str, chat_history: list = None, is_image_generation: bool = False, is_web_search: bool = False) -> str:
@@ -698,8 +692,8 @@ Citations should be in [1], [2], etc. format at the end of relevant sentences.
             return response
         except Exception as e:
             error_msg = f"Error in get_response for conversation {conversation_id}: {str(e)}"
-            logger.error(error_msg)
-            logger.error(traceback.format_exc())
+            print(error_msg)
+            print(traceback.format_exc())
             raise Exception(error_msg)
 
 # Initialize global RAG service

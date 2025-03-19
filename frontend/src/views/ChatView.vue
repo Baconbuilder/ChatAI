@@ -79,7 +79,25 @@
           
           // If no conversation exists, create one
           if (!currentConversation.value) {
-            await store.dispatch('chat/createConversation', 'New Chat');
+            try {
+              const newConversation = await store.dispatch('chat/createConversation', 'New Chat');
+              // Wait for the state to be updated
+              await new Promise(resolve => setTimeout(resolve, 100));
+              
+              // If still no conversation after waiting, throw error
+              if (!currentConversation.value) {
+                console.error('Failed to create conversation: State was not updated');
+                throw new Error('Failed to create conversation. Please try again.');
+              }
+            } catch (error) {
+              console.error('Error creating conversation:', error);
+              throw new Error('Failed to create conversation. Please try again.');
+            }
+          }
+
+          // Safety check - ensure we have a valid conversation
+          if (!currentConversation.value || !currentConversation.value.id) {
+            throw new Error('Failed to create or load conversation');
           }
 
           // Create user message

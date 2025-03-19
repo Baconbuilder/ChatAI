@@ -29,6 +29,10 @@ export default {
       }
     },
     ADD_CONVERSATION(state, conversation) {
+      // Ensure the conversation has an updated_at timestamp
+      if (!conversation.updated_at) {
+        conversation.updated_at = new Date().toISOString();
+      }
       state.conversations.unshift(conversation);
       state.currentConversation = conversation;
     },
@@ -44,6 +48,15 @@ export default {
           state.currentConversation.messages = [];
         }
         state.currentConversation.messages.push(message);
+        
+        // Update the conversation's updated_at timestamp
+        state.currentConversation.updated_at = new Date().toISOString();
+        
+        // Also update in the conversations list
+        const conversationInList = state.conversations.find(c => c.id === conversationId);
+        if (conversationInList) {
+          conversationInList.updated_at = new Date().toISOString();
+        }
       }
     },
     REMOVE_MESSAGE(state, { conversationId, messageId }) {
