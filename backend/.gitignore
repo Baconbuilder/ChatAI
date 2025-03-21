@@ -1,14 +1,13 @@
-# Ignore Root directory and its contents
+# Ignore directories with user data
 Root/
-
-# Ignore static directory and its contents
 static/
-
-# Ignore vector_db directory and its contents
 vector_db/
 
-# Ignore SQLite database file
+# Ignore database files
 gptinterface.db
+*.db
+*.sqlite
+*.sqlite3
 
 # Python
 __pycache__/
@@ -36,6 +35,9 @@ wheels/
 # Virtual Environment
 venv/
 ENV/
+.env
+.env.*
+!.env.example
 
 # IDE
 .idea/
@@ -43,5 +45,5 @@ ENV/
 *.swp
 *.swo
 
-# Environment variables
-.env 
+# Logs
+*.log 
