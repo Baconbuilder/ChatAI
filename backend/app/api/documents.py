@@ -6,12 +6,12 @@ from app.models.user import User
 from app.services.rag_service import rag_service
 import os
 import shutil
-from typing import List
 import uuid
 import traceback
 
 router = APIRouter()
 
+# Upload a document to a conversation vector store
 @router.post("/documents/upload")
 async def upload_document(
     file: UploadFile = File(...),
@@ -77,6 +77,7 @@ async def upload_document(
             detail=f"Error uploading file: {str(e)}\n{traceback.format_exc()}"
         )
 
+# Testing
 @router.get("/documents/test")
 async def test_vectorstore(
     conversation_id: int,

@@ -12,6 +12,7 @@ from app.core.auth import get_current_user
 router = APIRouter()
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl=f"{settings.API_V1_STR}/auth/login")
 
+# Login endpoint
 @router.post("/auth/login", response_model=Token)
 async def login(
     db: Session = Depends(get_db),
@@ -40,6 +41,7 @@ async def login(
         }
     }
 
+# Register endpoint
 @router.post("/auth/register", response_model=UserResponse)
 async def register(user_in: UserCreate, db: Session = Depends(get_db)):
     # Check if user exists
@@ -66,6 +68,7 @@ async def register(user_in: UserCreate, db: Session = Depends(get_db)):
         "name": user.name
     }
 
+# Logout endpoint
 @router.post("/auth/logout")
 async def logout(current_user: User = Depends(get_current_user)):
     # In a JWT-based system, the client handles logout by removing the token

@@ -2,6 +2,7 @@ from sqlalchemy import Column, Integer, String, Text, ForeignKey
 from sqlalchemy.orm import relationship
 from app.models.base import Base, TimestampMixin
 
+# Conversation model 
 class Conversation(Base, TimestampMixin):
     __tablename__ = "conversations"
 
@@ -13,6 +14,7 @@ class Conversation(Base, TimestampMixin):
     messages = relationship("Message", back_populates="conversation", cascade="all, delete-orphan")
     user = relationship("User")
 
+# Message model 
 class Message(Base, TimestampMixin):
     __tablename__ = "messages"
 

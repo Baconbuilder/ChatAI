@@ -95,7 +95,7 @@ import { ref, computed } from 'vue';
 import { useStore } from 'vuex';
 import { useRouter } from 'vue-router';
 import { authService } from '@/services/authService';
-import { validators, getValidationMessage } from '@/utils/validators';
+import { getValidationMessage } from '@/utils/validators';
 
 export default {
   name: 'RegisterForm',

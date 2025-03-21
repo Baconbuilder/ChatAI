@@ -1,4 +1,3 @@
-from typing import Optional
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError, jwt
@@ -10,6 +9,7 @@ from app.schemas.auth import TokenPayload
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl=f"{settings.API_V1_STR}/auth/login")
 
+# Authenticate the user
 async def get_current_user(
     db: Session = Depends(get_db),
     token: str = Depends(oauth2_scheme)

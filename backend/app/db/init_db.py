@@ -2,14 +2,13 @@ from sqlalchemy.orm import Session
 from app.core.security import get_password_hash
 from app.models.base import Base
 from app.models.user import User
-from app.models.conversation import Conversation, Message
 from app.db.session import engine
 
 def init_db(db: Session) -> None:
     # Create tables
     Base.metadata.create_all(bind=engine)
     
-    # Create admin user if not exists
+    # Create admin user
     admin = db.query(User).filter(User.email == "admin@example.com").first()
     if not admin:
         admin = User(
@@ -22,7 +21,7 @@ def init_db(db: Session) -> None:
         db.commit()
         db.refresh(admin)
 
-    # Create test user if not exists
+    # Create test user 
     test_user = db.query(User).filter(User.email == "test@example.com").first()
     if not test_user:
         test_user = User(

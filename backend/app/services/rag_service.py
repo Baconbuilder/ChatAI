@@ -3,26 +3,17 @@ from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.messages import HumanMessage, AIMessage
 from langchain.chains import create_history_aware_retriever, create_retrieval_chain
 from langchain.chains.combine_documents import create_stuff_documents_chain
-from langchain_community.document_loaders import PyPDFLoader, DirectoryLoader
+from langchain_community.document_loaders import PyPDFLoader
 from langchain_chroma import Chroma
 from langchain_text_splitters import RecursiveCharacterTextSplitter
-from langchain.schema import BaseRetriever
-from pydantic import BaseModel, Field
 import re
 import os
 import traceback
-import glob
 import shutil
-from typing import List, Dict, Any, Optional
-import numpy as np
-from dataclasses import dataclass
-from datetime import datetime
 import base64
-from io import BytesIO
 from openai import OpenAI
 from dotenv import load_dotenv
 import uuid
-import openai
 import requests
 from bs4 import BeautifulSoup
 import trafilatura
@@ -38,14 +29,12 @@ CHUNK_SIZE = 512
 CHUNK_OVERLAP = 50
 CHUNK_SIZE_L = 1024
 CHUNK_OVERLAP_L = 100
-ZH_CHUNK_SIZE_L = 384
-ZH_CHUNK_OVERLAP_L = 75
+# ZH_CHUNK_SIZE_L = 384
+# ZH_CHUNK_OVERLAP_L = 75
 ZH_CHUNK_SIZE = 200
 ZH_CHUNK_OVERLAP = 30
 
 load_dotenv()
-
-openai_api_key = os.getenv('OPENAI_API_KEY')
 
 # System messages for web search
 SEARCH_OR_NOT_MSG = (
@@ -122,7 +111,7 @@ class RAGService:
             print(error_msg)
             print(traceback.format_exc())
             raise Exception(error_msg)
-
+        
     def split_documents(self, documents):
         """Split documents into chunks based on language"""
         try:
@@ -132,7 +121,16 @@ class RAGService:
             other_docs = [doc for doc in documents if doc.metadata.get("language") not in ["en", "zh"]]
             
             print(f"Documents by language - EN: {len(en_docs)}, ZH: {len(zh_docs)}, Other: {len(other_docs)}")
-            
+            # en_splitter = RecursiveCharacterTextSplitter(
+            #         chunk_size=CHUNK_SIZE,
+            #         chunk_overlap=CHUNK_OVERLAP,
+            #         separators=["\n\n", "\n", ". ", " ", ""]
+            #     )
+            zh_splitter = RecursiveCharacterTextSplitter(
+                    chunk_size=ZH_CHUNK_SIZE,
+                    chunk_overlap=ZH_CHUNK_OVERLAP,
+                    separators=["\n\n", "\n", "。", "，", "、", " ", ""]
+                )
             # Configure language-specific splitters
             if (len(en_docs) > 10):
                 en_splitter = RecursiveCharacterTextSplitter(
@@ -147,18 +145,18 @@ class RAGService:
                     separators=["\n\n", "\n", ". ", " ", ""]
                 )
             
-            if (len(zh_docs) > 10):
-                zh_splitter = RecursiveCharacterTextSplitter(
-                    chunk_size=ZH_CHUNK_SIZE_L,
-                    chunk_overlap=ZH_CHUNK_OVERLAP_L,
-                    separators=["\n\n", "\n", "。", "，", "、", " ", ""]
-                )
-            else:   
-                zh_splitter = RecursiveCharacterTextSplitter(
-                    chunk_size=ZH_CHUNK_SIZE,
-                    chunk_overlap=ZH_CHUNK_OVERLAP,
-                    separators=["\n\n", "\n", "。", "，", "、", " ", ""]
-                )
+            # if (len(zh_docs) > 10):
+            #     zh_splitter = RecursiveCharacterTextSplitter(
+            #         chunk_size=ZH_CHUNK_SIZE_L,
+            #         chunk_overlap=ZH_CHUNK_OVERLAP_L,
+            #         separators=["\n\n", "\n", "。", "，", "、", " ", ""]
+            #     )
+            # else:   
+            #     zh_splitter = RecursiveCharacterTextSplitter(
+            #         chunk_size=ZH_CHUNK_SIZE,
+            #         chunk_overlap=ZH_CHUNK_OVERLAP,
+            #         separators=["\n\n", "\n", "。", "，", "、", " ", ""]
+            #     )
             
             result_docs = []
             if en_docs:
@@ -254,7 +252,7 @@ class RAGService:
 
             # Create document chains with prompts
             en_prompt = ChatPromptTemplate.from_messages([
-                ("system", """You are a helpful and friendly AI assistant capable of both general conversation and document analysis.
+                ("system", """You are a helpful and friendly AI assistant capable of general conversation, document analysis, image generation, and web search.
 
                         Core principles:
                         1. Never make up information or statistics
@@ -288,10 +286,10 @@ class RAGService:
 
                         5. For web search context:
                            - When responding based on web search results, synthesize the information clearly
+                           - Maintain awareness of web search context in the conversation's chat history
                            - Cite sources when appropriate by mentioning the website or publication
                            - Acknowledge the recency of information when responding to questions about current events
                            - Don't deny or contradict the fact that web search was used to find information
-                           - Maintain awareness of web search context in the conversation
                         
                         \n\n
                         {context}"""),
@@ -300,15 +298,15 @@ class RAGService:
             ])
             
             zh_prompt = ChatPromptTemplate.from_messages([
-                ("system", """你是一個專業且親切的AI助理，能夠進行一般對話並分析文件。
+                ("system", """你是一個專業且親切的AI助理，能夠進行一般對話、分析文件、圖片生成和網絡搜索。
 
                         核心原則：
                         1. 絕不編造資訊或統計數據
-                        2. 如果不知道答案，請禮貌的說不知道
-                        3. 保持回答的一致性
-                        4. 如果需要更正先前的回答，要明確說明
-                        5. 清楚區分文件內容和一般知識
-                        6. 請使用繁體中文進行回答，不要參雜其他語言，除非是文件中出現的專有名詞
+                        2. 請使用繁體中文進行回答，不要參雜其他語言，除非是文件中出現的專有名詞
+                        3. 如果不知道答案，請禮貌的說不知道
+                        4. 保持回答的一致性
+                        5. 如果需要更正先前的回答，要明確說明
+                        6. 清楚區分文件內容和一般知識
 
                         回應查詢指南：
                         1. 針對文件相關查詢：
@@ -335,10 +333,10 @@ class RAGService:
 
                         5. 針對網絡搜索相關對話：
                            - 當回應基於網絡搜索結果時，要清晰地綜合信息
+                           - 在對話中保持對網絡搜索上下文的認知
                            - 在適當的時候引用來源，例如提及網站或出版物
                            - 在回答關於時事的問題時，確認信息的時效性
                            - 不要否認或矛盾網絡搜索被用來查找信息的事實
-                           - 保持對網絡搜索上下文的認知
                         
                         \n\n
                         {context}"""),
@@ -668,16 +666,19 @@ class RAGService:
                     
                     # Add search results to the prompt
                     prompt = f"""WEB SEARCH RESULTS:
-{search_results}
+                    {search_results}
 
-USER QUERY: {query}
+                    USER QUERY: {query}
 
-Based on the web search results above, provide a comprehensive, accurate answer to the user's query.
-Include only information found in the search results.
-If the information is not in the search results, say you don't have enough information.
-Citations should be in [1], [2], etc. format at the end of relevant sentences.
-"""
-                    
+                    Based on the web search results above, provide a comprehensive, accurate answer to the user's query.
+                    Include only information found in the search results.
+                    You have to provide an objective answer based on the search results, don't say you don't have enough information.
+                    The answer shouldd be unambiguous, dont say it appears that or it may be.
+                    Dont mention dates or years in the answer.
+                    The answer should be a paragraph of 4 or 5 sentences.
+                    You dont have to cite the sources.
+                    """
+                                        
                     # Get response using the chain
                     result = await chain.ainvoke({
                         "input": prompt,

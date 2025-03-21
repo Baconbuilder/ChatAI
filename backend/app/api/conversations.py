@@ -1,5 +1,5 @@
-from typing import List, Optional
-from fastapi import APIRouter, Depends, HTTPException, status
+from typing import List
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from app.db.session import get_db
 from app.models.conversation import Conversation, Message
@@ -15,6 +15,7 @@ from app.services.rag_service import rag_service
 
 router = APIRouter()
 
+# Create a new conversation
 @router.post("/conversations", response_model=ConversationResponse)
 def create_conversation(
     conversation: ConversationCreate,
@@ -30,6 +31,7 @@ def create_conversation(
     db.refresh(db_conversation)
     return db_conversation
 
+# Get all conversations for the current user
 @router.get("/conversations", response_model=List[ConversationResponse])
 def get_conversations(
     db: Session = Depends(get_db),
@@ -37,6 +39,7 @@ def get_conversations(
 ):
     return db.query(Conversation).filter(Conversation.user_id == current_user.id).all()
 
+# Get a specific conversation by ID
 @router.get("/conversations/{conversation_id}", response_model=ConversationResponse)
 def get_conversation(
     conversation_id: int,
@@ -51,6 +54,7 @@ def get_conversation(
         raise HTTPException(status_code=404, detail="Conversation not found")
     return conversation
 
+# Create a new message in a conversation
 @router.post("/conversations/{conversation_id}/messages", response_model=MessageResponse)
 async def create_message(
     conversation_id: int,
@@ -117,6 +121,7 @@ async def create_message(
             detail="An error occurred while generating the response"
         )
 
+# Delete a conversation
 @router.delete("/conversations/{conversation_id}")
 def delete_conversation(
     conversation_id: int,
@@ -140,6 +145,7 @@ def delete_conversation(
     db.commit()
     return {"message": "Conversation deleted"}
 
+# Update the title of a conversation
 @router.put("/conversations/{conversation_id}", response_model=ConversationResponse)
 def update_conversation(
     conversation_id: int,

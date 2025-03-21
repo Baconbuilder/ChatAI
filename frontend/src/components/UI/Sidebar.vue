@@ -67,6 +67,7 @@ export default {
     const createNewChat = async () => {
       try {
         const conversation = await store.dispatch('chat/createConversation', 'New Chat');
+        currentConversationId.value = conversation.id;
         router.push(`/chat/${conversation.id}`);
       } catch (error) {
         console.error('Failed to create new chat:', error);

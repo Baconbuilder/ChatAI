@@ -1,6 +1,5 @@
 from typing import List
 from pydantic_settings import BaseSettings
-from pydantic import AnyHttpUrl
 
 class Settings(BaseSettings):
     # API Settings

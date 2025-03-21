@@ -1,6 +1,7 @@
 from sqlalchemy import Column, Integer, String, Boolean
 from app.models.base import Base, TimestampMixin
 
+# User model
 class User(Base, TimestampMixin):
     __tablename__ = "users"
 
