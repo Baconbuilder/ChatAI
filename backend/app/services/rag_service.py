@@ -84,7 +84,11 @@ class RAGService:
         self.embeddings = OllamaEmbeddings(model=EMBEDDING_MODEL)
         self.base_vector_path = os.path.join(os.path.dirname(__file__), '..', '..', 'vector_db')
         self.openai_client = OpenAI()
-        self.images_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'static', 'images')
+        
+        # Create static directory and its images subdirectory
+        static_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'static')
+        os.makedirs(static_dir, exist_ok=True)
+        self.images_dir = os.path.join(static_dir, 'images')
         os.makedirs(self.images_dir, exist_ok=True)
         
         # Create base vector store directory if it doesn't exist

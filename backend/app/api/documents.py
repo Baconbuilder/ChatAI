@@ -27,8 +27,12 @@ async def upload_document(
                 detail="Only PDF files are allowed"
             )
 
+        # Ensure Root directory exists
+        root_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'Root')
+        os.makedirs(root_dir, exist_ok=True)
+
         # Create user-specific directory if it doesn't exist
-        user_dir = os.path.join("Root", str(current_user.id))
+        user_dir = os.path.join(root_dir, str(current_user.id))
         os.makedirs(user_dir, exist_ok=True)
 
         # Generate unique filename
