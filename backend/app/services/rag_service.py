@@ -46,7 +46,8 @@ SEARCH_OR_NOT_MSG = (
 QUERY_MSG = (
     'Create a simple search query to find the specific information needed. Use only essential keywords and dates. '
     'No special operators or formatting. Focus on the core question without adding assumptions. '
-    'Examples: "us president 2024" or "tesla stock price today" or "weather new york". '
+    'For current events or facts, include "current" . '
+    'Examples: "current us president" or "tesla stock price today" or "weather new york". '
     'Keep it under 5 words when possible. Do not include names of people unless specifically asked about them.'
 )
 
@@ -60,6 +61,21 @@ CONTAINS_DATA_MSG = (
     'Only return False if the page is completely unrelated or contains no useful information. '
     'Respond only with "True" or "False" - no other text.'
 )
+
+WEB_SEARCH_RESPONSE_TEMPLATE = """WEB SEARCH RESULTS:
+{search_results}
+
+USER QUERY: {query}
+
+Based on the web search results above, provide a comprehensive, accurate answer to the user's query.
+Include only information found in the search results.
+You must provide an objective answer based on the search results, don't say you don't have enough information.
+The answer should be unambiguous, don't say "it appears that" or "it may be".
+The answer should be a paragraph of 4 or 5 sentences.
+You don't have to cite the sources.
+If the search results contain conflicting information, prioritize the most recent and authoritative sources.
+For questions about current events or facts, ensure the information is up-to-date and accurate.
+"""
 
 class RAGService:
     def __init__(self):
@@ -111,7 +127,7 @@ class RAGService:
             print(error_msg)
             print(traceback.format_exc())
             raise Exception(error_msg)
-        
+
     def split_documents(self, documents):
         """Split documents into chunks based on language"""
         try:
@@ -260,6 +276,10 @@ class RAGService:
                         3. Be consistent with previous responses
                         4. If correcting a previous response, acknowledge the correction
                         5. Clearly distinguish between document-based and general knowledge
+                        6. Maintain accurate awareness of the conversation history
+                        7. When summarizing conversations, only include topics that were actually discussed
+                        8. When summarizing chat history, if the web search result conflicts with the llm knowledge, prioritize the web search result
+                        9. Don't make assumptions about previous conversations or topics
 
                         When responding to queries:
                         1. For document-specific queries:
@@ -273,10 +293,12 @@ class RAGService:
                            - Maintain appropriate confidence levels about well-known facts vs. uncertain information
 
                         3. For all responses:
-                           - Be natural and engaging
-                           - Maintain a friendly, conversational tone
+                        - Be natural and engaging
+                        - Maintain a friendly, conversational tone
                            - Don't ask if the user wants to know about documents
                            - If mixing document and general knowledge, clearly distinguish between the two
+                           - When asked about conversation history, only include topics that were explicitly discussed
+                           - Don't make up or assume topics that weren't part of the conversation
 
                         4. For image generation context:
                            - Acknowledge when users are thanking you for generated images
@@ -307,6 +329,10 @@ class RAGService:
                         4. 保持回答的一致性
                         5. 如果需要更正先前的回答，要明確說明
                         6. 清楚區分文件內容和一般知識
+                        7. 保持對對話歷史的準確認知
+                        8. 總結對話時，只包含實際討論過的主題
+                        9. 總結對話紀錄時，如果網絡搜索結果和LLM原有知識起衝突，優先使用網絡搜索結果
+                        10. 不要對之前的對話或主題做出假設
 
                         回應查詢指南：
                         1. 針對文件相關查詢：
@@ -320,10 +346,12 @@ class RAGService:
                            - 對於確定的事實和不確定的資訊保持適當的信心程度
 
                         3. 所有回應原則：
-                           - 保持自然友善的對話風格
-                           - 維持輕鬆的對話氛圍
-                           - 除非用戶特別詢問，否則不要主動詢問是否要了解文件內容
+                        - 保持自然友善的對話風格
+                        - 維持輕鬆的對話氛圍
+                        - 除非用戶特別詢問，否則不要主動詢問是否要了解文件內容
                            - 如果同時使用文件內容和一般知識，請清楚區分來源
+                           - 當被詢問對話歷史時，只包含明確討論過的主題
+                           - 不要編造或假設未在對話中出現的主題
 
                         4. 針對圖片生成相關對話：
                            - 當用戶感謝你生成的圖片時，要適當回應
@@ -420,10 +448,10 @@ class RAGService:
             # Remove any newlines and extra spaces
             search_query = ' '.join(search_query.split())
             
-            # Apply additional filtering to remove unnecessary terms
-            words = search_query.split()
-            if len(words) > 6:  # Keep it concise as per the system message
-                search_query = ' '.join(words[:6])
+            # # Apply additional filtering to remove unnecessary terms
+            # words = search_query.split()
+            # if len(words) > 6:  # Keep it concise as per the system message
+            #     search_query = ' '.join(words[:6])
             
             print(f"Generated search query: {search_query}")
             return search_query
@@ -548,7 +576,7 @@ class RAGService:
                 
             contexts = []
             checked_urls = set()
-            max_sources = 3  # Limit to 2 sources for faster response
+            max_sources = 5  # Increased to get more sources for better accuracy
             
             # Process results in order
             for result in search_results:
@@ -562,6 +590,10 @@ class RAGService:
                 checked_urls.add(url)
                 print(f"\nChecking source {len(contexts) + 1} of {max_sources}: {url}")
                 
+                # Skip certain domains that might have outdated information
+                # if any(domain in url.lower() for domain in ['wikipedia.org', 'archive.org']):
+                #     continue
+                
                 page_text = await self.scrape_webpage(url)
                 if not page_text:
                     continue
@@ -569,6 +601,7 @@ class RAGService:
                 # Skip relevance check for the first source to ensure we get at least one result
                 if len(contexts) == 0 or await self.contains_data_needed(page_text, search_query, query):
                     print("Source contains relevant information - adding to context")
+                    # Add timestamp if available in the page
                     contexts.append(f"Source: {url}\n\n{page_text}")
                 else:
                     print("Source does not contain relevant information - skipping")
@@ -665,19 +698,10 @@ class RAGService:
                                     sources.append(url)
                     
                     # Add search results to the prompt
-                    prompt = f"""WEB SEARCH RESULTS:
-                    {search_results}
-
-                    USER QUERY: {query}
-
-                    Based on the web search results above, provide a comprehensive, accurate answer to the user's query.
-                    Include only information found in the search results.
-                    You have to provide an objective answer based on the search results, don't say you don't have enough information.
-                    The answer shouldd be unambiguous, dont say it appears that or it may be.
-                    Dont mention dates or years in the answer.
-                    The answer should be a paragraph of 4 or 5 sentences.
-                    You dont have to cite the sources.
-                    """
+                    prompt = WEB_SEARCH_RESPONSE_TEMPLATE.format(
+                        search_results=search_results,
+                        query=query
+                    )
                                         
                     # Get response using the chain
                     result = await chain.ainvoke({
