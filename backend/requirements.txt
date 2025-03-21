@@ -6,9 +6,13 @@ python-jose==3.3.0
 passlib==1.7.4
 python-multipart==0.0.9
 python-dotenv==1.0.1
-pydantic-settings>=2.4.0,<3.0.0
+pydantic-settings==2.8.1
 trafilatura==1.12.2
 beautifulsoup4==4.12.3
+requests==2.32.3
+openai==1.66.3
+email-validator==2.2.0
+bcrypt==4.0.1
 
 # Langchain ecosystem (specified versions)
 langchain==0.3.18
