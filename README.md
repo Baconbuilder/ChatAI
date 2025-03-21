@@ -19,8 +19,8 @@ A comprehensive context-aware AI chat platform that combines multiple AI capabil
 - **Database:** SQLite with SQLAlchemy ORM
 - **AI/ML:**
   - Ollama with Llama 3.2 for chat (supports other models from Ollama)
-  - Snowflake Arctic Embed 2.0 for embeddings
-  - Langchain 0.3.x for RAG implementation
+  - Snowflake Arctic Embed 2.0 for RAG embeddings
+  - Langchain 0.3.18 for RAG implementation
   - ChromaDB for vector storage
   - DALL-E for image generation
 
